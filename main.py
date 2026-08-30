@@ -100,6 +100,7 @@ class Bundle:
         self.flights = (
             client.table("flights").select("*").eq("trip_id", self.trip["id"]).order("sort_order").execute().data
         )
+        self.flight_by_id = {f["id"]: f for f in self.flights}
 
 
 def _zone(name: str):
@@ -327,6 +328,144 @@ def flights_view(request: Request):
         "ends_label": f"{_date_label(ends_local.date())} · {ends_local.strftime('%H:%M')} · {bundle.trip.get('ends_terminal') or ''}".strip(" ·"),
     }
     return HTMLResponse(templates.flights_page(ctx))
+
+
+def _empty_flight_form() -> dict:
+    return {
+        "leg": "",
+        "code": "",
+        "endpoint_from": "",
+        "endpoint_from_sub": "",
+        "endpoint_to": "",
+        "endpoint_to_sub": "",
+        "note": "",
+        "sort_order": 0,
+    }
+
+
+@app.get("/flights/add", response_class=HTMLResponse)
+def flight_add_form(request: Request):
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
+    ctx = {
+        "trip": bundle.trip,
+        "travelers": bundle.travelers,
+        "session": session,
+        "vacation": logic.vacation_length(bundle.trip["starts_at"], bundle.trip["ends_at"]),
+        "flight_id": None,
+        "form": _empty_flight_form(),
+        "form_action": "/flights/add",
+    }
+    return HTMLResponse(templates.flight_form_page(ctx))
+
+
+@app.post("/flights/add", response_class=HTMLResponse)
+def flight_add_submit(
+    request: Request,
+    leg: str = Form(...),
+    code: str = Form(""),
+    endpoint_from: str = Form(""),
+    endpoint_from_sub: str = Form(""),
+    endpoint_to: str = Form(""),
+    endpoint_to_sub: str = Form(""),
+    note: str = Form(""),
+    sort_order: int = Form(0),
+):
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
+    client = get_supabase_client()
+    client.table("flights").insert(
+        {
+            "trip_id": bundle.trip["id"],
+            "leg": leg.strip(),
+            "code": code.strip() or None,
+            "endpoint_from": endpoint_from.strip() or None,
+            "endpoint_from_sub": endpoint_from_sub.strip() or None,
+            "endpoint_to": endpoint_to.strip() or None,
+            "endpoint_to_sub": endpoint_to_sub.strip() or None,
+            "note": note.strip() or None,
+            "sort_order": sort_order,
+        }
+    ).execute()
+    return RedirectResponse("/flights", status_code=303)
+
+
+@app.get("/flights/{flight_id}/edit", response_class=HTMLResponse)
+def flight_edit_form(request: Request, flight_id: str):
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
+    flight = bundle.flight_by_id.get(flight_id)
+    if not flight:
+        return RedirectResponse("/flights", status_code=303)
+    ctx = {
+        "trip": bundle.trip,
+        "travelers": bundle.travelers,
+        "session": session,
+        "vacation": logic.vacation_length(bundle.trip["starts_at"], bundle.trip["ends_at"]),
+        "flight_id": flight_id,
+        "form": {
+            "leg": flight["leg"],
+            "code": flight.get("code") or "",
+            "endpoint_from": flight.get("endpoint_from") or "",
+            "endpoint_from_sub": flight.get("endpoint_from_sub") or "",
+            "endpoint_to": flight.get("endpoint_to") or "",
+            "endpoint_to_sub": flight.get("endpoint_to_sub") or "",
+            "note": flight.get("note") or "",
+            "sort_order": flight.get("sort_order") or 0,
+        },
+        "form_action": f"/flights/{flight_id}/edit",
+    }
+    return HTMLResponse(templates.flight_form_page(ctx))
+
+
+@app.post("/flights/{flight_id}/edit", response_class=HTMLResponse)
+def flight_edit_submit(
+    request: Request,
+    flight_id: str,
+    leg: str = Form(...),
+    code: str = Form(""),
+    endpoint_from: str = Form(""),
+    endpoint_from_sub: str = Form(""),
+    endpoint_to: str = Form(""),
+    endpoint_to_sub: str = Form(""),
+    note: str = Form(""),
+    sort_order: int = Form(0),
+):
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
+    client = get_supabase_client()
+    client.table("flights").update(
+        {
+            "leg": leg.strip(),
+            "code": code.strip() or None,
+            "endpoint_from": endpoint_from.strip() or None,
+            "endpoint_from_sub": endpoint_from_sub.strip() or None,
+            "endpoint_to": endpoint_to.strip() or None,
+            "endpoint_to_sub": endpoint_to_sub.strip() or None,
+            "note": note.strip() or None,
+            "sort_order": sort_order,
+        }
+    ).eq("id", flight_id).execute()
+    return RedirectResponse("/flights", status_code=303)
+
+
+@app.post("/flights/{flight_id}/delete")
+def flight_delete(request: Request, flight_id: str):
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
+    client = get_supabase_client()
+    client.table("flights").delete().eq("id", flight_id).execute()
+    return RedirectResponse("/flights", status_code=303)
 
 
 def _empty_form(day_index: int, prefill_type: str = "museum", start_hour: float | None = None) -> dict:

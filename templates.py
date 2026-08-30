@@ -543,7 +543,7 @@ def tickets_page(ctx: dict) -> str:
 def flights_page(ctx: dict) -> str:
     trip = ctx["trip"]
     rows = "".join(
-        f"""<div class="card" style="margin-bottom:10px">
+        f"""<a class="card" href="/flights/{f['id']}/edit" style="display:block;margin-bottom:10px;color:var(--ink)">
   <div class="card-pad">
     <div style="display:flex;align-items:center;gap:9px">
       <span class="mono" style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#8fa2bd">{esc(f['leg'])}</span>
@@ -558,7 +558,7 @@ def flights_page(ctx: dict) -> str:
     </div>
     <div style="font:400 11.5px/1.5 'IBM Plex Sans',sans-serif;color:var(--ink-55);margin-top:12px;padding-top:11px;border-top:1px solid var(--border)">{esc(f['note'] or '')}</div>
   </div>
-</div>"""
+</a>"""
         for f in ctx["flights"]
     )
     body = f"""
@@ -576,7 +576,7 @@ def flights_page(ctx: dict) -> str:
     </div>
   </div>
   <div style="margin-top:14px">{rows}</div>
-  <a href="/add?type=travel" style="display:block;margin-top:16px;text-align:center;padding:14px;border-radius:13px;
+  <a href="/flights/add" style="display:block;margin-top:16px;text-align:center;padding:14px;border-radius:13px;
      border:1px dashed var(--gold-dim);font:500 12.5px/1 'IBM Plex Sans',sans-serif">+ Add a flight or train leg</a>
 </div>
 """
@@ -585,6 +585,71 @@ def flights_page(ctx: dict) -> str:
         active="flights",
         session=ctx["session"],
         trip=trip,
+        travelers=ctx["travelers"],
+        vacation=ctx["vacation"],
+        body=body,
+    )
+
+
+def flight_form_page(ctx: dict) -> str:
+    form = ctx["form"]
+    error_html = f'<div class="error-note">{esc(ctx["error"])}</div>' if ctx.get("error") else ""
+    body = f"""
+<div style="padding:56px 20px 60px;max-width:520px">
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <a href="/flights" class="mono" style="font-size:12px;color:var(--ink-55)">Cancel</a>
+    <span class="label">{"Edit leg" if ctx.get("flight_id") else "New leg"}</span>
+    <span></span>
+  </div>
+  <div class="h1">{"Edit leg" if ctx.get("flight_id") else "New leg"}</div>
+  <form method="post" action="{ctx["form_action"]}">
+    <div class="field-label">Leg label</div>
+    <input class="field-input" name="leg" placeholder="e.g. Outbound &middot; leaves home" value="{esc(form['leg'])}" required>
+
+    <div class="field-label">Flight / train code</div>
+    <input class="field-input" name="code" placeholder="e.g. BA 119" value="{esc(form['code'])}">
+
+    <div class="field-row">
+      <div class="field-col">
+        <div class="field-label" style="margin-top:0">From</div>
+        <input class="field-input" name="endpoint_from" placeholder="e.g. DEN" value="{esc(form['endpoint_from'])}">
+      </div>
+      <div class="field-col">
+        <div class="field-label" style="margin-top:0">From detail</div>
+        <input class="field-input" name="endpoint_from_sub" placeholder="e.g. 21 Nov 08:45 MST" value="{esc(form['endpoint_from_sub'])}">
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field-col">
+        <div class="field-label" style="margin-top:0">To</div>
+        <input class="field-input" name="endpoint_to" placeholder="e.g. LHR" value="{esc(form['endpoint_to'])}">
+      </div>
+      <div class="field-col">
+        <div class="field-label" style="margin-top:0">To detail</div>
+        <input class="field-input" name="endpoint_to_sub" placeholder="e.g. 22 Nov 09:15 GMT" value="{esc(form['endpoint_to_sub'])}">
+      </div>
+    </div>
+
+    <div class="field-label">Note (optional)</div>
+    <input class="field-input" name="note" placeholder="Bag drop, gate, connection notes" value="{esc(form['note'])}">
+
+    <div class="field-label">Sort order</div>
+    <input class="field-input" type="number" name="sort_order" step="1" value="{form['sort_order']}">
+
+    {error_html}
+    <button type="submit" class="btn btn-gold" style="width:100%;margin-top:22px;padding:14px">Save leg</button>
+  </form>
+  {f'''<form method="post" action="/flights/{ctx["flight_id"]}/delete" style="margin-top:10px" onsubmit="return confirm('Delete this flight leg?')">
+    <button type="submit" class="btn btn-ghost" style="width:100%;padding:14px;color:#d98a8a;border-color:rgba(217,138,138,.35)">Delete leg</button>
+  </form>''' if ctx.get("flight_id") else ""}
+</div>
+"""
+    return shell(
+        title=f"{'Edit' if ctx.get('flight_id') else 'New'} leg — {ctx['trip']['name']}",
+        active="flights",
+        session=ctx["session"],
+        trip=ctx["trip"],
         travelers=ctx["travelers"],
         vacation=ctx["vacation"],
         body=body,
@@ -603,7 +668,7 @@ def add_page(ctx: dict) -> str:
     )
     who_chips = "".join(
         f"""<label class="who-chip"><input type="radio" name="who" value="{esc(w)}" {"checked" if w == ctx["form"]["who"] else ""}>{esc(w)}</label>"""
-        for w in ("Dana", "Chris", "Both")
+        for w in [t["name"] for t in ctx["travelers"]] + ["Both"]
     )
     day_options = "".join(
         f'<option value="{d["day_index"]}" {"selected" if d["day_index"] == ctx["form"]["day_index"] else ""}>{esc(d["date_label"])}</option>'
