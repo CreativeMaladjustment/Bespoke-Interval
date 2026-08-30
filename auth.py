@@ -8,6 +8,7 @@ so it can't be forged without SESSION_SECRET, but its contents (trip id,
 traveler id) aren't sensitive enough to need encryption.
 """
 
+import hmac
 import os
 from dataclasses import dataclass
 
@@ -57,4 +58,4 @@ def verify_password(password: str) -> bool:
     expected = os.getenv("PASSWORD")
     if not expected:
         raise RuntimeError("PASSWORD environment variable is required")
-    return password == expected
+    return hmac.compare_digest(password.encode("utf-8"), expected.encode("utf-8"))
