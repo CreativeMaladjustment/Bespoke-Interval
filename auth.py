@@ -1,17 +1,17 @@
-"""Session cookies and PIN verification.
+"""Session cookies and password verification.
 
 This app has no user accounts — it's a private, two-traveler trip planner.
-"Auth" is a single shared PIN for the trip plus picking which traveler you
-are; a successful check issues a signed, httponly cookie naming the trip and
-traveler. The cookie is signed (not encrypted) with itsdangerous, so it can't
-be forged without SESSION_SECRET, but its contents (trip id, traveler id)
-aren't sensitive enough to need encryption.
+"Auth" is a single shared password (from PASSWORD env var) plus picking which
+traveler you are; a successful check issues a signed, httponly cookie naming
+the trip and traveler. The cookie is signed (not encrypted) with itsdangerous,
+so it can't be forged without SESSION_SECRET, but its contents (trip id,
+traveler id) aren't sensitive enough to need encryption.
 """
 
+import hmac
 import os
 from dataclasses import dataclass
 
-import bcrypt
 from fastapi import Request
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
@@ -54,5 +54,8 @@ def read_session(request: Request) -> Session | None:
     )
 
 
-def verify_pin(pin: str, pin_hash: str) -> bool:
-    return bcrypt.checkpw(pin.encode("utf-8"), pin_hash.encode("utf-8"))
+def verify_password(password: str) -> bool:
+    expected = os.getenv("PASSWORD")
+    if not expected:
+        raise RuntimeError("PASSWORD environment variable is required")
+    return hmac.compare_digest(password.encode("utf-8"), expected.encode("utf-8"))
