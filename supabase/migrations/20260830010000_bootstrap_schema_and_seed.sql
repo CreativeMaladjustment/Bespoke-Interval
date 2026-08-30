@@ -7,9 +7,12 @@
 -- statement here is safe to run whether the original two migrations already
 -- applied, partially applied, or never ran at all:
 --   - all `create table` statements use `if not exists`
---   - the seed data is guarded by a single `already_seeded` check, so
---     re-running this file never creates duplicate travelers/days/blocks/
---     tickets/flights for a trip that's already been seeded
+--   - each seed insert is guarded by its own `not exists`/`on conflict`
+--     check scoped to that row's natural key (trip_days by (trip_id,
+--     day_index); blocks by (trip_day_id, starts_at, title); tickets by
+--     (trip_id, title, occurs_at); flights by (trip_id, leg)), so
+--     re-running this file — including after a partial or hand-applied
+--     seed — only ever inserts the rows that are actually still missing
 --
 -- If your Supabase project already has this schema and data (check
 -- Table Editor for `trips`/`blocks`/etc.), this migration is a safe no-op.
@@ -142,7 +145,10 @@ from public.trips t,
     ('Chris', 'C', 'Traveller', 1)
   ) as v(name, initial, role, sort_order)
 where t.slug = 'london-october'
-  and not exists (select 1 from public.trip_days td where td.trip_id = t.id);
+  and not exists (
+    select 1 from public.travelers ex
+    where ex.trip_id = t.id and ex.name = v.name
+  );
 
 insert into public.trip_days (trip_id, day_index, calendar_date, reference_timezone, kicker, tag)
 select t.id, v.day_index, v.calendar_date, v.reference_timezone, v.kicker, v.tag
@@ -223,7 +229,12 @@ from t, td,
     (10, 'travel', 'BA 219 LHR → DEN', 'Wheels up 15:20 — trip ends', '2026-10-12 12:45:00+01'::timestamptz, '2026-10-12 18:05:00-06'::timestamptz, 'Both')
   ) as v(day_index, type, title, subtitle, starts_at, ends_at, who)
 where td.day_index = v.day_index
-  and not exists (select 1 from public.blocks b where b.trip_day_id = td.trip_day_id);
+  and not exists (
+    select 1 from public.blocks ex
+    where ex.trip_day_id = td.trip_day_id
+      and ex.starts_at = v.starts_at
+      and ex.title = v.title
+  );
 
 insert into public.tickets (trip_id, category, kind, title, venue, occurs_at, who, facts, sort_order)
 select t.id, v.category, v.kind, v.title, v.venue, v.occurs_at, v.who, v.facts::jsonb, v.sort_order
@@ -241,7 +252,10 @@ from public.trips t,
       '[{"k":"Entry","v":"10:00"},{"k":"Cost","v":"Free, booked"},{"k":"Ref","v":"BM-70412"}]', 5)
   ) as v(category, kind, title, venue, occurs_at, who, facts, sort_order)
 where t.slug = 'london-october'
-  and not exists (select 1 from public.tickets tk where tk.trip_id = t.id);
+  and not exists (
+    select 1 from public.tickets ex
+    where ex.trip_id = t.id and ex.title = v.title and ex.occurs_at = v.occurs_at
+  );
 
 insert into public.flights (trip_id, leg, code, endpoint_from, endpoint_from_sub, endpoint_to, endpoint_to_sub, note, sort_order)
 select t.id, v.leg, v.code, v.endpoint_from, v.endpoint_from_sub, v.endpoint_to, v.endpoint_to_sub, v.note, v.sort_order
@@ -257,4 +271,7 @@ from public.trips t,
       'A-Line to Union Station.', 4)
   ) as v(leg, code, endpoint_from, endpoint_from_sub, endpoint_to, endpoint_to_sub, note, sort_order)
 where t.slug = 'london-october'
-  and not exists (select 1 from public.flights f where f.trip_id = t.id);
+  and not exists (
+    select 1 from public.flights ex
+    where ex.trip_id = t.id and ex.leg = v.leg
+  );
