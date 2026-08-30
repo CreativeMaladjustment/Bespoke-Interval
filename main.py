@@ -68,16 +68,23 @@ class Bundle:
         ]
         self.days_by_index = {d["day_index"]: d for d in self.days}
         self.days_by_id = {d["id"]: d for d in self.days}
+        self.days_by_date = {d["calendar_date"]: d for d in self.days}
 
         block_rows = client.table("blocks").select("*").eq("trip_id", self.trip["id"]).order("starts_at").execute().data
         self.blocks_by_day: dict[int, list[dict]] = {d["day_index"]: [] for d in self.days}
         self.block_by_id: dict[str, dict] = {}
+        self.block_by_ticket_id: dict[str, dict] = {}
+        self.block_by_flight_id: dict[str, dict] = {}
         for b in block_rows:
             b = {**b, "starts_at": _parse_dt(b["starts_at"]), "ends_at": _parse_dt(b["ends_at"])}
             day = self.days_by_id.get(b["trip_day_id"])
             if day:
                 self.blocks_by_day[day["day_index"]].append(b)
             self.block_by_id[b["id"]] = b
+            if b.get("ticket_id"):
+                self.block_by_ticket_id[b["ticket_id"]] = b
+            if b.get("flight_id"):
+                self.block_by_flight_id[b["flight_id"]] = b
 
         ticket_rows = (
             client.table("tickets").select("*").eq("trip_id", self.trip["id"]).order("sort_order").execute().data
@@ -160,6 +167,12 @@ def _block_sheet(b: dict, day_label: str) -> str:
         {"k": "Length", "v": logic.dur((b["ends_at"] - b["starts_at"]).total_seconds() / 3600)},
         {"k": "Day", "v": day_label},
     ]
+    if b.get("ticket_id"):
+        edit_href, edit_label = f"/tickets/{b['ticket_id']}/edit", "Edit ticket"
+    elif b.get("flight_id"):
+        edit_href, edit_label = f"/flights/{b['flight_id']}/edit", "Edit leg"
+    else:
+        edit_href, edit_label = f"/blocks/{b['id']}/edit", "Edit block"
     return templates._sheet(
         f"sheet-{b['id']}",
         logic.INK[b["type"]]["ink"],
@@ -168,8 +181,8 @@ def _block_sheet(b: dict, day_label: str) -> str:
         b.get("subtitle") or "No notes yet.",
         b["who"],
         facts,
-        edit_href=f"/blocks/{b['id']}/edit",
-        edit_label="Edit block",
+        edit_href=edit_href,
+        edit_label=edit_label,
     )
 
 
@@ -343,7 +356,114 @@ def _empty_ticket_form() -> dict:
         "who": "Both",
         "facts_text": "",
         "sort_order": 0,
+        "duration_minutes": 90,
     }
+
+
+def _sync_ticket_block(
+    client,
+    bundle: "Bundle",
+    ticket_id: str,
+    *,
+    occurs_at: datetime | None,
+    category: str,
+    title: str,
+    venue: str,
+    who: str,
+    duration_minutes: int,
+) -> None:
+    """Keep the calendar block generated from a ticket in sync with it.
+
+    A ticket only appears on the Week/Day calendar through this linked
+    block, since that view renders exclusively from `blocks`."""
+    existing = bundle.block_by_ticket_id.get(ticket_id)
+
+    if not occurs_at:
+        if existing:
+            client.table("blocks").delete().eq("id", existing["id"]).execute()
+        return
+
+    dest_tz = _zone(bundle.trip["destination_timezone"])
+    day = bundle.days_by_date.get(occurs_at.astimezone(dest_tz).date())
+    if not day:
+        if existing:
+            client.table("blocks").delete().eq("id", existing["id"]).execute()
+        return
+
+    payload = {
+        "trip_id": bundle.trip["id"],
+        "trip_day_id": day["id"],
+        "type": category,
+        "title": title,
+        "subtitle": venue or None,
+        "starts_at": occurs_at.isoformat(),
+        "ends_at": (occurs_at + timedelta(minutes=duration_minutes)).isoformat(),
+        "who": who,
+        "ticket_id": ticket_id,
+    }
+    if existing:
+        client.table("blocks").update(payload).eq("id", existing["id"]).execute()
+    else:
+        client.table("blocks").insert(payload).execute()
+
+
+FLIGHT_BLOCK_DEFAULT_MINUTES = 90
+
+
+def _sync_flight_block(
+    client,
+    bundle: "Bundle",
+    flight_id: str,
+    *,
+    departs_at: datetime | None,
+    arrives_at: datetime | None,
+    leg: str,
+    code: str,
+    note: str,
+) -> None:
+    """Keep the calendar block generated from a flight leg in sync with it.
+
+    Mirrors _sync_ticket_block: a flight leg only appears on the Week/Day
+    calendar through this linked block. When both departs_at and arrives_at
+    are set the block spans exactly that; with only one set (e.g. a
+    wheels-down/wheels-up leg that only marks a single instant) it falls
+    back to a default duration, same idea as a ticket's duration_minutes."""
+    existing = bundle.block_by_flight_id.get(flight_id)
+
+    if not departs_at and not arrives_at:
+        if existing:
+            client.table("blocks").delete().eq("id", existing["id"]).execute()
+        return
+
+    if departs_at and arrives_at:
+        starts_at, ends_at = departs_at, arrives_at
+    elif departs_at:
+        starts_at, ends_at = departs_at, departs_at + timedelta(minutes=FLIGHT_BLOCK_DEFAULT_MINUTES)
+    else:
+        starts_at, ends_at = arrives_at, arrives_at + timedelta(minutes=FLIGHT_BLOCK_DEFAULT_MINUTES)
+
+    dest_tz = _zone(bundle.trip["destination_timezone"])
+    day = bundle.days_by_date.get(starts_at.astimezone(dest_tz).date())
+    if not day:
+        if existing:
+            client.table("blocks").delete().eq("id", existing["id"]).execute()
+        return
+
+    payload = {
+        "trip_id": bundle.trip["id"],
+        "trip_day_id": day["id"],
+        "type": "travel",
+        "title": leg,
+        "subtitle": " · ".join(s for s in (code, note) if s) or None,
+        "starts_at": starts_at.isoformat(),
+        "ends_at": ends_at.isoformat(),
+        "who": "Both",
+        "flight_id": flight_id,
+    }
+    if existing:
+        client.table("blocks").update(payload).eq("id", existing["id"]).execute()
+    else:
+        client.table("blocks").insert(payload).execute()
 
 
 @app.get("/tickets/add", response_class=HTMLResponse)
@@ -375,6 +495,7 @@ def ticket_add_submit(
     who: str = Form("Both"),
     facts_text: str = Form(""),
     sort_order: int = Form(0),
+    duration_minutes: int = Form(90),
 ):
     auth = _authenticate(request)
     if not auth:
@@ -383,19 +504,28 @@ def ticket_add_submit(
     if category not in logic.INK:
         return RedirectResponse("/tickets/add", status_code=303)
     client = get_supabase_client()
-    client.table("tickets").insert(
+    title = title.strip()
+    venue = venue.strip()
+    occurs_dt = _dest_local_dt(bundle.trip, occurs_at)
+    result = client.table("tickets").insert(
         {
             "trip_id": bundle.trip["id"],
             "category": category,
             "kind": kind.strip(),
-            "title": title.strip(),
-            "venue": venue.strip() or None,
-            "occurs_at": _iso(_dest_local_dt(bundle.trip, occurs_at)),
+            "title": title,
+            "venue": venue or None,
+            "occurs_at": _iso(occurs_dt),
             "who": who,
             "facts": _parse_facts(facts_text),
             "sort_order": sort_order,
         }
     ).execute()
+    ticket_id = result.data[0]["id"]
+    _sync_ticket_block(
+        client, bundle, ticket_id,
+        occurs_at=occurs_dt, category=category, title=title, venue=venue, who=who,
+        duration_minutes=duration_minutes,
+    )
     return RedirectResponse("/tickets", status_code=303)
 
 
@@ -409,6 +539,10 @@ def ticket_edit_form(request: Request, ticket_id: str):
     if not ticket:
         return RedirectResponse("/tickets", status_code=303)
     occurs_at = _parse_dt(ticket["occurs_at"]) if ticket.get("occurs_at") else None
+    linked_block = bundle.block_by_ticket_id.get(ticket_id)
+    duration_minutes = (
+        round((linked_block["ends_at"] - linked_block["starts_at"]).total_seconds() / 60) if linked_block else 90
+    )
     ctx = {
         "trip": bundle.trip,
         "travelers": bundle.travelers,
@@ -424,6 +558,7 @@ def ticket_edit_form(request: Request, ticket_id: str):
             "who": ticket["who"],
             "facts_text": _facts_to_text(ticket["facts"]),
             "sort_order": ticket.get("sort_order") or 0,
+            "duration_minutes": duration_minutes,
         },
         "form_action": f"/tickets/{ticket_id}/edit",
     }
@@ -442,6 +577,7 @@ def ticket_edit_submit(
     who: str = Form("Both"),
     facts_text: str = Form(""),
     sort_order: int = Form(0),
+    duration_minutes: int = Form(90),
 ):
     auth = _authenticate(request)
     if not auth:
@@ -450,18 +586,26 @@ def ticket_edit_submit(
     if category not in logic.INK:
         return RedirectResponse(f"/tickets/{ticket_id}/edit", status_code=303)
     client = get_supabase_client()
+    title = title.strip()
+    venue = venue.strip()
+    occurs_dt = _dest_local_dt(bundle.trip, occurs_at)
     client.table("tickets").update(
         {
             "category": category,
             "kind": kind.strip(),
-            "title": title.strip(),
-            "venue": venue.strip() or None,
-            "occurs_at": _iso(_dest_local_dt(bundle.trip, occurs_at)),
+            "title": title,
+            "venue": venue or None,
+            "occurs_at": _iso(occurs_dt),
             "who": who,
             "facts": _parse_facts(facts_text),
             "sort_order": sort_order,
         }
     ).eq("id", ticket_id).execute()
+    _sync_ticket_block(
+        client, bundle, ticket_id,
+        occurs_at=occurs_dt, category=category, title=title, venue=venue, who=who,
+        duration_minutes=duration_minutes,
+    )
     return RedirectResponse("/tickets", status_code=303)
 
 
@@ -586,23 +730,30 @@ def flight_add_submit(
         client.table("flights").update({"is_trip_start": False}).eq("trip_id", bundle.trip["id"]).eq("is_trip_start", True).execute()
     if is_trip_end:
         client.table("flights").update({"is_trip_end": False}).eq("trip_id", bundle.trip["id"]).eq("is_trip_end", True).execute()
-    client.table("flights").insert(
+    leg = leg.strip()
+    code = code.strip()
+    note = note.strip()
+    departs_dt = _dest_local_dt(bundle.trip, departs_at)
+    arrives_dt = _dest_local_dt(bundle.trip, arrives_at)
+    result = client.table("flights").insert(
         {
             "trip_id": bundle.trip["id"],
-            "leg": leg.strip(),
-            "code": code.strip() or None,
+            "leg": leg,
+            "code": code or None,
             "endpoint_from": endpoint_from.strip() or None,
             "endpoint_from_sub": endpoint_from_sub.strip() or None,
             "endpoint_to": endpoint_to.strip() or None,
             "endpoint_to_sub": endpoint_to_sub.strip() or None,
-            "note": note.strip() or None,
+            "note": note or None,
             "sort_order": sort_order,
-            "arrives_at": _iso(_dest_local_dt(bundle.trip, arrives_at)),
-            "departs_at": _iso(_dest_local_dt(bundle.trip, departs_at)),
+            "arrives_at": _iso(arrives_dt),
+            "departs_at": _iso(departs_dt),
             "is_trip_start": bool(is_trip_start),
             "is_trip_end": bool(is_trip_end),
         }
     ).execute()
+    flight_id = result.data[0]["id"]
+    _sync_flight_block(client, bundle, flight_id, departs_at=departs_dt, arrives_at=arrives_dt, leg=leg, code=code, note=note)
     return RedirectResponse("/flights", status_code=303)
 
 
@@ -666,22 +817,28 @@ def flight_edit_submit(
         client.table("flights").update({"is_trip_start": False}).eq("trip_id", bundle.trip["id"]).eq("is_trip_start", True).execute()
     if is_trip_end:
         client.table("flights").update({"is_trip_end": False}).eq("trip_id", bundle.trip["id"]).eq("is_trip_end", True).execute()
+    leg = leg.strip()
+    code = code.strip()
+    note = note.strip()
+    departs_dt = _dest_local_dt(bundle.trip, departs_at)
+    arrives_dt = _dest_local_dt(bundle.trip, arrives_at)
     client.table("flights").update(
         {
-            "leg": leg.strip(),
-            "code": code.strip() or None,
+            "leg": leg,
+            "code": code or None,
             "endpoint_from": endpoint_from.strip() or None,
             "endpoint_from_sub": endpoint_from_sub.strip() or None,
             "endpoint_to": endpoint_to.strip() or None,
             "endpoint_to_sub": endpoint_to_sub.strip() or None,
-            "note": note.strip() or None,
+            "note": note or None,
             "sort_order": sort_order,
-            "arrives_at": _iso(_dest_local_dt(bundle.trip, arrives_at)),
-            "departs_at": _iso(_dest_local_dt(bundle.trip, departs_at)),
+            "arrives_at": _iso(arrives_dt),
+            "departs_at": _iso(departs_dt),
             "is_trip_start": bool(is_trip_start),
             "is_trip_end": bool(is_trip_end),
         }
     ).eq("id", flight_id).execute()
+    _sync_flight_block(client, bundle, flight_id, departs_at=departs_dt, arrives_at=arrives_dt, leg=leg, code=code, note=note)
     return RedirectResponse("/flights", status_code=303)
 
 
@@ -895,5 +1052,11 @@ def delete_block(request: Request, block_id: str):
     block = bundle.block_by_id.get(block_id)
     day_index = bundle.days_by_id[block["trip_day_id"]]["day_index"] if block else 2
     client = get_supabase_client()
-    client.table("blocks").delete().eq("id", block_id).execute()
+    if block and block.get("ticket_id"):
+        # Deleting a ticket cascades (via FK) to delete this block too.
+        client.table("tickets").delete().eq("id", block["ticket_id"]).execute()
+    elif block and block.get("flight_id"):
+        client.table("flights").delete().eq("id", block["flight_id"]).execute()
+    else:
+        client.table("blocks").delete().eq("id", block_id).execute()
     return RedirectResponse(f"/day/{day_index}", status_code=303)

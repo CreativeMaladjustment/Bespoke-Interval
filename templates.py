@@ -714,6 +714,11 @@ def ticket_form_page(ctx: dict) -> str:
     <div class="field-label">Occurs at (destination time, optional)</div>
     <input class="field-input" type="datetime-local" name="occurs_at" value="{esc(form.get('occurs_at') or '')}">
 
+    <div class="field-label">Duration on calendar (minutes)</div>
+    <input class="field-input" type="number" name="duration_minutes" min="15" step="15" value="{form.get('duration_minutes', 90)}">
+    <div style="font:400 11.5px/1.4 'IBM Plex Sans',sans-serif;color:var(--ink-55);margin-top:6px">
+      When "Occurs at" is set, this ticket also appears as a block on the Week/Day calendar.</div>
+
     <div style="margin-top:14px;padding:15px;border-radius:13px;background:var(--panel-3);border:1px solid var(--ink-10)">
       <div class="field-label" style="margin-top:0">Who's going</div>
       <div class="who-row">{who_chips}</div>
