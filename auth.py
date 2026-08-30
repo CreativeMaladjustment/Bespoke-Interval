@@ -58,4 +58,4 @@ def verify_password(password: str) -> bool:
     expected = os.getenv("PASSWORD")
     if not expected:
         raise RuntimeError("PASSWORD environment variable is required")
-    return hmac.compare_digest(password, expected)
+    return hmac.compare_digest(password.encode("utf-8"), expected.encode("utf-8"))

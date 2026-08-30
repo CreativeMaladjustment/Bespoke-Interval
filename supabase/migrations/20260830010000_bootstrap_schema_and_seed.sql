@@ -126,7 +126,7 @@ values (
   'Thanksgiving, London',
   'America/Denver',
   'Europe/London',
-  crypt('4610', gen_salt('bf')),
+  crypt('unused', gen_salt('bf')),
   '2026-11-22 09:15:00+00',
   'LHR T2',
   '2026-11-30 16:10:00+00',
@@ -228,8 +228,8 @@ from t, td,
 
     (10, 'meal', 'Breakfast, pack', null, '2026-11-30 08:00:00+00'::timestamptz, '2026-11-30 09:00:00+00'::timestamptz, 'Both'),
     (10, 'rest', 'Check out, bags with concierge', null, '2026-11-30 09:00:00+00'::timestamptz, '2026-11-30 10:00:00+00'::timestamptz, 'Both'),
-    (10, 'transit', 'Tube + Heathrow Express', 'Auto-blocked · 3h before wheels-up', '2026-11-30 13:00:00+00'::timestamptz, '2026-11-30 14:15:00+00'::timestamptz, 'Both'),
-    (10, 'travel', 'BA 120 LHR → DEN', 'Wheels up 16:10 — trip ends', '2026-11-30 14:15:00+00'::timestamptz, '2026-11-30 16:10:00-07'::timestamptz, 'Both')
+    (10, 'transit', 'Tube + Heathrow Express', 'Auto-blocked · 3h before wheels-up', '2026-11-30 13:10:00+00'::timestamptz, '2026-11-30 14:15:00+00'::timestamptz, 'Both'),
+    (10, 'travel', 'BA 120 LHR → DEN', 'Wheels up 16:10 — trip ends', '2026-11-30 14:15:00+00'::timestamptz, '2026-11-30 18:55:00-07'::timestamptz, 'Both')
   ) as v(day_index, type, title, subtitle, starts_at, ends_at, who)
 where td.day_index = v.day_index
   and not exists (
@@ -268,9 +268,9 @@ from public.trips t,
       'Bags dropped by 08:00 MST. Denver time only appears on this leg.', 1),
     ('Trip starts · wheels down', 'LHR T2', '09:15', 'Border + bags ≈ 75 min', 'GMT', 'Express 11:45',
       'Everything after this is scheduled in London time.', 2),
-    ('Trip ends · wheels up', 'BA 120', 'LHR', '30 Nov 16:10 GMT', 'DEN', '30 Nov 16:10 MST',
-      'Airport travel auto-blocked from 13:00, three hours before departure.', 3),
-    ('Home', 'Ground', 'DEN', '16:10 MST', 'Home', '17:30 MST',
+    ('Trip ends · wheels up', 'BA 120', 'LHR', '30 Nov 16:10 GMT', 'DEN', '30 Nov 18:55 MST',
+      'Airport travel auto-blocked from 13:10, three hours before departure.', 3),
+    ('Home', 'Ground', 'DEN', '18:55 MST', 'Home', '20:15 MST',
       'Uber/ride from airport.', 4)
   ) as v(leg, code, endpoint_from, endpoint_from_sub, endpoint_to, endpoint_to_sub, note, sort_order)
 where t.slug = 'thanksgiving-london-2026'
