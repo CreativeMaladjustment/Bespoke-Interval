@@ -116,6 +116,7 @@ alter table public.flights enable row level security;
 -- (drive to the airport, check-in, the outbound flight) is stored in true
 -- America/Denver local time; everything from wheels-down at Heathrow onward
 -- is true Europe/London local time.
+--
 -- Authentication now uses the PASSWORD environment variable.
 -- `pin_hash` is still seeded here only because the existing schema requires it.
 
