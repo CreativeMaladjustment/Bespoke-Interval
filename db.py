@@ -19,4 +19,4 @@ def get_supabase_client() -> Client:
 
 
 def get_trip_slug() -> str:
-    return os.getenv("TRIP_SLUG", "london-october")
+    return os.getenv("TRIP_SLUG", "thanksgiving-london-2026")

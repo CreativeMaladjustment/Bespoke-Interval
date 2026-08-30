@@ -22,8 +22,8 @@ def setup_function(_):
 
 TRIP_ID = "11111111-1111-1111-1111-111111111111"
 DAY_ID = "22222222-2222-2222-2222-222222222222"
-DANA_ID = "33333333-3333-3333-3333-333333333333"
-CHRIS_ID = "44444444-4444-4444-4444-444444444444"
+JD_ID = "33333333-3333-3333-3333-333333333333"
+EMY_ID = "44444444-4444-4444-4444-444444444444"
 BLOCK_ID = "55555555-5555-5555-5555-555555555555"
 
 PIN_HASH = bcrypt.hashpw(b"4610", bcrypt.gensalt()).decode()
@@ -32,22 +32,22 @@ PIN_HASH = bcrypt.hashpw(b"4610", bcrypt.gensalt()).decode()
 def _trip_row():
     return {
         "id": TRIP_ID,
-        "slug": "london-october",
-        "name": "London, October",
+        "slug": "thanksgiving-london-2026",
+        "name": "Thanksgiving, London",
         "home_timezone": "America/Denver",
         "destination_timezone": "Europe/London",
         "pin_hash": PIN_HASH,
-        "starts_at": "2026-10-04T10:45:00+00:00",
+        "starts_at": "2026-11-22T09:15:00+00:00",
         "starts_terminal": "LHR T2",
-        "ends_at": "2026-10-12T14:20:00+00:00",
+        "ends_at": "2026-11-30T16:10:00+00:00",
         "ends_terminal": "LHR T5",
     }
 
 
 def _travelers():
     return [
-        {"id": DANA_ID, "trip_id": TRIP_ID, "name": "Dana", "initial": "D", "role": "Trip owner", "sort_order": 0},
-        {"id": CHRIS_ID, "trip_id": TRIP_ID, "name": "Chris", "initial": "C", "role": "Traveller", "sort_order": 1},
+        {"id": JD_ID, "trip_id": TRIP_ID, "name": "jd", "initial": "j", "role": "Trip owner", "sort_order": 0},
+        {"id": EMY_ID, "trip_id": TRIP_ID, "name": "emy", "initial": "e", "role": "Traveller", "sort_order": 1},
     ]
 
 
@@ -57,9 +57,9 @@ def _days():
             "id": DAY_ID,
             "trip_id": TRIP_ID,
             "day_index": 2,
-            "calendar_date": "2026-10-04",
+            "calendar_date": "2026-11-22",
             "reference_timezone": "Europe/London",
-            "kicker": "Vacation clock starts 11:45",
+            "kicker": "Vacation clock starts 09:15",
             "tag": "Land LHR",
         }
     ]
@@ -71,11 +71,11 @@ def _blocks():
             "id": BLOCK_ID,
             "trip_id": TRIP_ID,
             "trip_day_id": DAY_ID,
-            "type": "theatre",
-            "title": "The Winter Ledger",
-            "subtitle": "Aldwych Theatre · stalls H12–H13",
-            "starts_at": "2026-10-04T18:30:00+00:00",
-            "ends_at": "2026-10-04T21:15:00+00:00",
+            "type": "walk",
+            "title": "Walk: Bloomsbury squares",
+            "subtitle": "Slow loop to shake off the flight",
+            "starts_at": "2026-11-22T13:00:00+00:00",
+            "ends_at": "2026-11-22T15:00:00+00:00",
             "who": "Both",
         }
     ]
@@ -148,20 +148,20 @@ def test_root_redirects_to_login_when_signed_out(mock_client):
 def test_login_page_renders_travelers(mock_client):
     resp = client.get("/login")
     assert resp.status_code == 200
-    assert "Dana" in resp.text
-    assert "Chris" in resp.text
+    assert "jd" in resp.text
+    assert "emy" in resp.text
 
 
 @patch("main.get_supabase_client", return_value=FakeClient())
 def test_login_wrong_pin_rejected(mock_client):
-    resp = client.post("/login", data={"traveler_id": DANA_ID, "pin": "0000"})
+    resp = client.post("/login", data={"traveler_id": JD_ID, "pin": "0000"})
     assert resp.status_code == 401
     assert "match" in resp.text
 
 
 @patch("main.get_supabase_client", return_value=FakeClient())
 def test_login_correct_pin_sets_cookie_and_redirects(mock_client):
-    resp = client.post("/login", data={"traveler_id": DANA_ID, "pin": "4610"})
+    resp = client.post("/login", data={"traveler_id": JD_ID, "pin": "4610"})
     assert resp.status_code == 303
     assert resp.headers["location"] == "/day/2"
     assert "bespoke_session" in resp.cookies
@@ -176,13 +176,13 @@ def test_day_view_requires_session(mock_client):
 
 @patch("main.get_supabase_client", return_value=FakeClient())
 def test_day_view_renders_blocks_when_authenticated(mock_client):
-    token = sign_session(TRIP_ID, DANA_ID, "Dana")
+    token = sign_session(TRIP_ID, JD_ID, "jd")
     client.cookies.set("bespoke_session", token)
     resp = client.get("/day/2")
     client.cookies.clear()
     assert resp.status_code == 200
-    assert "The Winter Ledger" in resp.text
-    assert "Sun 4 Oct" in resp.text
+    assert "Walk: Bloomsbury squares" in resp.text
+    assert "Sun 22 Nov" in resp.text
 
 
 @patch("main.get_supabase_client", return_value=FakeClient())
@@ -190,7 +190,7 @@ def test_stale_session_for_wrong_trip_is_rejected(mock_client):
     # A cookie signed for a trip/traveler that no longer matches the
     # currently configured trip (e.g. TRIP_SLUG was repointed) must not
     # grant access, and the stale cookie should be cleared.
-    token = sign_session("00000000-0000-0000-0000-000000000000", DANA_ID, "Dana")
+    token = sign_session("00000000-0000-0000-0000-000000000000", JD_ID, "jd")
     client.cookies.set("bespoke_session", token)
     resp = client.get("/day/2")
     client.cookies.clear()
@@ -211,7 +211,7 @@ def test_stale_session_for_unknown_traveler_is_rejected(mock_client):
 
 @patch("main.get_supabase_client", return_value=FakeClient())
 def test_add_form_survives_bad_query_params(mock_client):
-    token = sign_session(TRIP_ID, DANA_ID, "Dana")
+    token = sign_session(TRIP_ID, JD_ID, "jd")
     client.cookies.set("bespoke_session", token)
     resp = client.get("/add?day=not-a-number&type=nonsense-type&start=also-not-a-number")
     client.cookies.clear()
