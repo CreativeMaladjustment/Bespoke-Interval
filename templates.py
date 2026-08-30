@@ -331,31 +331,14 @@ def login_page(travelers: list[dict], trip_name: str, error: str | None = None) 
 
     <div style="margin-top:30px">
       <label for="password" class="label" style="display:block;margin-bottom:14px">Password</label>
-      <input type="password" name="password" id="password" required style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:4px;font:inherit;background:var(--ground);color:var(--ink-70)">
+      <input type="password" name="password" id="password" required
+        autocomplete="current-password"
+        style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:4px;font:inherit;font-size:15px;letter-spacing:0.03em;background:var(--ground);color:var(--ink-70)">
     </div>
     <button type="submit" class="btn" style="width:100%;margin-top:22px">Sign in</button>
     {error_html}
   </form>
 </div>
-<script>
-(function(){{
-  var input = document.getElementById('pin-input');
-  var dots = document.querySelectorAll('#pin-dots .pin-dot');
-  var form = input.closest('form');
-  function render(){{
-    dots.forEach(function(d, i){{ d.classList.toggle('on', i < input.value.length); }});
-  }}
-  document.getElementById('pin-pad').addEventListener('click', function(e){{
-    var btn = e.target.closest('.pin-key');
-    if (!btn || btn.disabled) return;
-    var k = btn.getAttribute('data-k');
-    if (k === 'back') input.value = input.value.slice(0, -1);
-    else if (input.value.length < 4) input.value += k;
-    render();
-    if (input.value.length === 4) setTimeout(function(){{ form.submit(); }}, 180);
-  }});
-}})();
-</script>
 </body>
 </html>"""
 
