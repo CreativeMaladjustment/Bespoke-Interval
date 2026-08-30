@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 import logic
 import templates
-from auth import COOKIE_NAME, Session, read_session, sign_session, verify_pin
+from auth import COOKIE_NAME, Session, read_session, sign_session, verify_password
 from db import get_supabase_client, get_trip_slug
 
 app = FastAPI()
@@ -183,12 +183,12 @@ def login_form(request: Request):
 
 
 @app.post("/login", response_class=HTMLResponse)
-def login_submit(traveler_id: str = Form(...), pin: str = Form(...)):
+def login_submit(traveler_id: str = Form(...), password: str = Form(...)):
     bundle = _get_bundle()
     traveler = next((t for t in bundle.travelers if t["id"] == traveler_id), None)
-    if not traveler or not verify_pin(pin, bundle.trip["pin_hash"]):
+    if not traveler or not verify_password(password):
         return HTMLResponse(
-            templates.login_page(bundle.travelers, bundle.trip["name"], error="That code didn't match. Try again."),
+            templates.login_page(bundle.travelers, bundle.trip["name"], error="That password didn't match. Try again."),
             status_code=401,
         )
     token = sign_session(bundle.trip["id"], traveler["id"], traveler["name"])
