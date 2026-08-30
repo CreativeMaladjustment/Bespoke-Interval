@@ -44,6 +44,8 @@ test_main.py                  # pytest, mocks the Supabase client
 
 3. Deploy. `vercel.json` at the repo root tells Vercel to build `main.py` with `@vercel/python` and route all traffic to it.
 
+Supabase's GitHub integration (Project Settings → Integrations → GitHub, in the dashboard) is set up with "Deploy to production" pointed at `main`, so merging a migration change to `main` auto-applies it — no separate CI step needed.
+
 ### 3. Local development
 
 ```bash
