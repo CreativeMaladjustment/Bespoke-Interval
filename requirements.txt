@@ -1,7 +1,7 @@
 fastapi==0.115.6
 uvicorn==0.34.0
 httpx==0.28.1
-supabase==2.11.0
+supabase==2.31.0
 python-multipart==0.0.20
 itsdangerous==2.2.0
 bcrypt==4.2.1
