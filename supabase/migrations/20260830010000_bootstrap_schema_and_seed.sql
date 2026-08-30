@@ -134,6 +134,9 @@ values (
 )
 on conflict (slug) do nothing;
 
+delete from public.travelers
+where trip_id = (select id from public.trips where slug = 'thanksgiving-london-2026');
+
 insert into public.travelers (trip_id, name, initial, role, sort_order)
 select t.id, v.name, v.initial, v.role, v.sort_order
 from public.trips t,
@@ -141,11 +144,7 @@ from public.trips t,
     ('jd', 'j', 'Trip owner', 0),
     ('emy', 'e', 'Traveller', 1)
   ) as v(name, initial, role, sort_order)
-where t.slug = 'thanksgiving-london-2026'
-  and not exists (
-    select 1 from public.travelers ex
-    where ex.trip_id = t.id and ex.name = v.name
-  );
+where t.slug = 'thanksgiving-london-2026';
 
 insert into public.trip_days (trip_id, day_index, calendar_date, reference_timezone, kicker, tag)
 select t.id, v.day_index, v.calendar_date, v.reference_timezone, v.kicker, v.tag
