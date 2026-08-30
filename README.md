@@ -44,17 +44,9 @@ test_main.py                  # pytest, mocks the Supabase client
 
 3. Deploy. `vercel.json` at the repo root tells Vercel to build `main.py` with `@vercel/python` and route all traffic to it.
 
-### 3. Auto-deploy migrations
+Supabase's GitHub integration (Project Settings → Integrations → GitHub, in the dashboard) is set up with "Deploy to production" pointed at `main`, so merging a migration change to `main` auto-applies it — no separate CI step needed.
 
-`.github/workflows/supabase-migrations.yml` runs `supabase db push` against the linked project whenever `supabase/migrations/**` changes on `main`. Add these repo secrets (Settings → Secrets and variables → Actions) for it to work:
-
-| Secret | Value |
-|---|---|
-| `SUPABASE_ACCESS_TOKEN` | a personal access token from [supabase.com/dashboard/account/tokens](https://supabase.com/dashboard/account/tokens) |
-| `SUPABASE_PROJECT_ID` | the project ref (same one used in `supabase link --project-ref <ref>`) |
-| `SUPABASE_DB_PASSWORD` | the database password set when the project was created |
-
-### 4. Local development
+### 3. Local development
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
