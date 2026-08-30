@@ -637,6 +637,23 @@ def flight_form_page(ctx: dict) -> str:
     <div class="field-label">Sort order</div>
     <input class="field-input" type="number" name="sort_order" step="1" value="{form['sort_order']}">
 
+    <div style="margin-top:14px;padding:15px;border-radius:13px;background:var(--panel-3);border:1px solid var(--ink-10)">
+      <div class="field-label" style="margin-top:0">Vacation clock</div>
+      <label class="who-chip" style="display:flex;align-items:center;gap:8px;text-align:left;padding:11px 12px">
+        <input type="checkbox" name="is_trip_start" value="1" {"checked" if form.get("is_trip_start") else ""}>
+        This leg's arrival starts the clock (wheels down)
+      </label>
+      <div class="field-label">Arrives at (destination time)</div>
+      <input class="field-input" type="datetime-local" name="arrives_at" value="{esc(form.get('arrives_at') or '')}">
+
+      <label class="who-chip" style="display:flex;align-items:center;gap:8px;text-align:left;padding:11px 12px;margin-top:12px">
+        <input type="checkbox" name="is_trip_end" value="1" {"checked" if form.get("is_trip_end") else ""}>
+        This leg's departure ends the clock (wheels up)
+      </label>
+      <div class="field-label">Departs at (destination time)</div>
+      <input class="field-input" type="datetime-local" name="departs_at" value="{esc(form.get('departs_at') or '')}">
+    </div>
+
     {error_html}
     <button type="submit" class="btn btn-gold" style="width:100%;margin-top:22px;padding:14px">Save leg</button>
   </form>
