@@ -2,7 +2,7 @@
 
 A private itinerary planner built for two travelers. Schedules every block in the destination timezone, reserves travel time around ticketed events, tracks theatre and timed-entry bookings, and matches free windows to museums, libraries, and walks. The trip runs wheels-down to wheels-up.
 
-The design (`design/London Trip.dc.html`, a Claude Design export) is the visual spec for the app: a private "London, October" trip for two travelers, Dana and Chris, with a shared sign-in code, a day/week schedule, a tickets list, and a flights/vacation-clock view.
+The design (`design/London Trip.dc.html`, a Claude Design export) is the visual spec for the app: a private "Thanksgiving, London" trip for two travelers, jd and emy, with a shared sign-in code, a day/week schedule, a tickets list, and a flights/vacation-clock view.
 
 ## Stack
 
@@ -26,12 +26,12 @@ test_main.py                  # pytest, mocks the Supabase client
 1. Create a project at [supabase.com](https://supabase.com).
 2. Install the Supabase CLI and run `supabase login`.
 3. From the repo root: `supabase link --project-ref <your-project-ref>` (the ref is in the project's dashboard URL).
-4. Apply the schema and seed data: `supabase db push`. This creates the `trips`, `travelers`, `trip_days`, `blocks`, `tickets`, and `flights` tables (all with RLS enabled and no public policies — every read/write goes through the backend's service-role key) and seeds one trip: **London, October**, Oct 4–12, 2026, for Dana and Chris.
+4. Apply the schema and seed data: `supabase db push`. This creates the `trips`, `travelers`, `trip_days`, `blocks`, `tickets`, and `flights` tables (all with RLS enabled and no public policies — every read/write goes through the backend's service-role key) and seeds one trip: **Thanksgiving, London**, Nov 22–30, 2026, for jd and emy.
 5. From the dashboard (Project Settings → API), copy the **Project URL** and the **service-role key**. These become `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` below. The service-role key must never be exposed to the browser — it's only read server-side.
 6. The seeded shared sign-in code is **4610**. Change it after your first deploy by running this in the Supabase SQL editor:
    ```sql
    update public.trips set pin_hash = crypt('<new code>', gen_salt('bf'))
-   where slug = 'london-october';
+   where slug = 'thanksgiving-london-2026';
    ```
 
 ### 2. Vercel
@@ -44,7 +44,7 @@ test_main.py                  # pytest, mocks the Supabase client
    | `SUPABASE_URL` | from Supabase step 5 | Production, Preview, Development |
    | `SUPABASE_SERVICE_ROLE_KEY` | from Supabase step 5 | Production, Preview, Development — never expose to the client |
    | `SESSION_SECRET` | a long random string (`python3 -c "import secrets; print(secrets.token_hex(32))"`) | Production, Preview, Development |
-   | `TRIP_SLUG` | `london-october` (optional — this is the default) | all |
+   | `TRIP_SLUG` | `thanksgiving-london-2026` (optional — this is the default) | all |
 
 3. Deploy. `vercel.json` at the repo root tells Vercel to build `main.py` with `@vercel/python` and route all traffic to it.
 
@@ -58,7 +58,7 @@ export $(grep -v '^#' .env | xargs)
 uvicorn main:app --reload
 ```
 
-Then open `http://localhost:8000`, pick Dana or Chris, and enter the shared code (`4610` unless you've changed it).
+Then open `http://localhost:8000`, pick jd or emy, and enter the shared code (`4610` unless you've changed it).
 
 Run the tests (these mock the Supabase client — no live database needed):
 
