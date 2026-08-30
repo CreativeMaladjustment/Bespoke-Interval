@@ -97,9 +97,17 @@ class Bundle:
             )
         self.ticket_by_id = {t["id"]: t for t in self.tickets}
 
-        self.flights = (
+        flight_rows = (
             client.table("flights").select("*").eq("trip_id", self.trip["id"]).order("sort_order").execute().data
         )
+        self.flights = [
+            {
+                **f,
+                "departs_at": _parse_dt(f["departs_at"]) if f.get("departs_at") else None,
+                "arrives_at": _parse_dt(f["arrives_at"]) if f.get("arrives_at") else None,
+            }
+            for f in flight_rows
+        ]
         self.flight_by_id = {f["id"]: f for f in self.flights}
 
 
@@ -273,7 +281,7 @@ def day_view(request: Request, day_index: int):
         "trip": bundle.trip,
         "travelers": bundle.travelers,
         "session": session,
-        "vacation": logic.vacation_length(bundle.trip["starts_at"], bundle.trip["ends_at"]),
+        "vacation": logic.vacation_length(*_clock_bounds(bundle)),
         "day": day,
         "days": bundle.days,
         "mobile_blocks": mobile_blocks,
@@ -302,11 +310,22 @@ def tickets_view(request: Request):
         "trip": bundle.trip,
         "travelers": bundle.travelers,
         "session": session,
-        "vacation": logic.vacation_length(bundle.trip["starts_at"], bundle.trip["ends_at"]),
+        "vacation": logic.vacation_length(*_clock_bounds(bundle)),
         "tickets": bundle.tickets,
         "sheets": sheets,
     }
     return HTMLResponse(templates.tickets_page(ctx))
+
+
+def _clock_bounds(bundle: "Bundle") -> tuple[datetime, datetime]:
+    """The vacation clock's start/end instants: the flagged flight legs'
+    arrival/departure when set, falling back to the trip's own boundary
+    columns for trips that haven't flagged a leg yet."""
+    start_leg = next((f for f in bundle.flights if f.get("is_trip_start") and f.get("arrives_at")), None)
+    end_leg = next((f for f in bundle.flights if f.get("is_trip_end") and f.get("departs_at")), None)
+    starts_at = start_leg["arrives_at"] if start_leg else bundle.trip["starts_at"]
+    ends_at = end_leg["departs_at"] if end_leg else bundle.trip["ends_at"]
+    return starts_at, ends_at
 
 
 @app.get("/flights", response_class=HTMLResponse)
@@ -316,18 +335,36 @@ def flights_view(request: Request):
         return _login_redirect()
     session, bundle = auth
     dest_tz = _zone(bundle.trip["destination_timezone"])
-    starts_local = bundle.trip["starts_at"].astimezone(dest_tz)
-    ends_local = bundle.trip["ends_at"].astimezone(dest_tz)
+    starts_at, ends_at = _clock_bounds(bundle)
+    starts_local = starts_at.astimezone(dest_tz)
+    ends_local = ends_at.astimezone(dest_tz)
     ctx = {
         "trip": bundle.trip,
         "travelers": bundle.travelers,
         "session": session,
-        "vacation": logic.vacation_length(bundle.trip["starts_at"], bundle.trip["ends_at"]),
+        "vacation": logic.vacation_length(starts_at, ends_at),
         "flights": bundle.flights,
         "starts_label": f"{_date_label(starts_local.date())} · {starts_local.strftime('%H:%M')} · {bundle.trip.get('starts_terminal') or ''}".strip(" ·"),
         "ends_label": f"{_date_label(ends_local.date())} · {ends_local.strftime('%H:%M')} · {bundle.trip.get('ends_terminal') or ''}".strip(" ·"),
     }
     return HTMLResponse(templates.flights_page(ctx))
+
+
+def _iso(dt: datetime | None) -> str | None:
+    return dt.isoformat() if dt else None
+
+
+def _dest_local_dt(trip: dict, value: str) -> datetime | None:
+    value = value.strip()
+    if not value:
+        return None
+    return datetime.fromisoformat(value).replace(tzinfo=_zone(trip["destination_timezone"]))
+
+
+def _dest_local_str(trip: dict, dt: datetime | None) -> str:
+    if not dt:
+        return ""
+    return dt.astimezone(_zone(trip["destination_timezone"])).strftime("%Y-%m-%dT%H:%M")
 
 
 def _empty_flight_form() -> dict:
@@ -340,6 +377,10 @@ def _empty_flight_form() -> dict:
         "endpoint_to_sub": "",
         "note": "",
         "sort_order": 0,
+        "arrives_at": "",
+        "departs_at": "",
+        "is_trip_start": False,
+        "is_trip_end": False,
     }
 
 
@@ -353,7 +394,7 @@ def flight_add_form(request: Request):
         "trip": bundle.trip,
         "travelers": bundle.travelers,
         "session": session,
-        "vacation": logic.vacation_length(bundle.trip["starts_at"], bundle.trip["ends_at"]),
+        "vacation": logic.vacation_length(*_clock_bounds(bundle)),
         "flight_id": None,
         "form": _empty_flight_form(),
         "form_action": "/flights/add",
@@ -372,12 +413,20 @@ def flight_add_submit(
     endpoint_to_sub: str = Form(""),
     note: str = Form(""),
     sort_order: int = Form(0),
+    arrives_at: str = Form(""),
+    departs_at: str = Form(""),
+    is_trip_start: str | None = Form(None),
+    is_trip_end: str | None = Form(None),
 ):
     auth = _authenticate(request)
     if not auth:
         return _login_redirect()
     session, bundle = auth
     client = get_supabase_client()
+    if is_trip_start:
+        client.table("flights").update({"is_trip_start": False}).eq("trip_id", bundle.trip["id"]).eq("is_trip_start", True).execute()
+    if is_trip_end:
+        client.table("flights").update({"is_trip_end": False}).eq("trip_id", bundle.trip["id"]).eq("is_trip_end", True).execute()
     client.table("flights").insert(
         {
             "trip_id": bundle.trip["id"],
@@ -389,6 +438,10 @@ def flight_add_submit(
             "endpoint_to_sub": endpoint_to_sub.strip() or None,
             "note": note.strip() or None,
             "sort_order": sort_order,
+            "arrives_at": _iso(_dest_local_dt(bundle.trip, arrives_at)),
+            "departs_at": _iso(_dest_local_dt(bundle.trip, departs_at)),
+            "is_trip_start": bool(is_trip_start),
+            "is_trip_end": bool(is_trip_end),
         }
     ).execute()
     return RedirectResponse("/flights", status_code=303)
@@ -407,7 +460,7 @@ def flight_edit_form(request: Request, flight_id: str):
         "trip": bundle.trip,
         "travelers": bundle.travelers,
         "session": session,
-        "vacation": logic.vacation_length(bundle.trip["starts_at"], bundle.trip["ends_at"]),
+        "vacation": logic.vacation_length(*_clock_bounds(bundle)),
         "flight_id": flight_id,
         "form": {
             "leg": flight["leg"],
@@ -418,6 +471,10 @@ def flight_edit_form(request: Request, flight_id: str):
             "endpoint_to_sub": flight.get("endpoint_to_sub") or "",
             "note": flight.get("note") or "",
             "sort_order": flight.get("sort_order") or 0,
+            "arrives_at": _dest_local_str(bundle.trip, flight.get("arrives_at")),
+            "departs_at": _dest_local_str(bundle.trip, flight.get("departs_at")),
+            "is_trip_start": bool(flight.get("is_trip_start")),
+            "is_trip_end": bool(flight.get("is_trip_end")),
         },
         "form_action": f"/flights/{flight_id}/edit",
     }
@@ -436,12 +493,20 @@ def flight_edit_submit(
     endpoint_to_sub: str = Form(""),
     note: str = Form(""),
     sort_order: int = Form(0),
+    arrives_at: str = Form(""),
+    departs_at: str = Form(""),
+    is_trip_start: str | None = Form(None),
+    is_trip_end: str | None = Form(None),
 ):
     auth = _authenticate(request)
     if not auth:
         return _login_redirect()
     session, bundle = auth
     client = get_supabase_client()
+    if is_trip_start:
+        client.table("flights").update({"is_trip_start": False}).eq("trip_id", bundle.trip["id"]).eq("is_trip_start", True).execute()
+    if is_trip_end:
+        client.table("flights").update({"is_trip_end": False}).eq("trip_id", bundle.trip["id"]).eq("is_trip_end", True).execute()
     client.table("flights").update(
         {
             "leg": leg.strip(),
@@ -452,6 +517,10 @@ def flight_edit_submit(
             "endpoint_to_sub": endpoint_to_sub.strip() or None,
             "note": note.strip() or None,
             "sort_order": sort_order,
+            "arrives_at": _iso(_dest_local_dt(bundle.trip, arrives_at)),
+            "departs_at": _iso(_dest_local_dt(bundle.trip, departs_at)),
+            "is_trip_start": bool(is_trip_start),
+            "is_trip_end": bool(is_trip_end),
         }
     ).eq("id", flight_id).execute()
     return RedirectResponse("/flights", status_code=303)
@@ -512,7 +581,7 @@ def add_form(request: Request):
         "trip": bundle.trip,
         "travelers": bundle.travelers,
         "session": session,
-        "vacation": logic.vacation_length(bundle.trip["starts_at"], bundle.trip["ends_at"]),
+        "vacation": logic.vacation_length(*_clock_bounds(bundle)),
         "days": bundle.days,
         "form": _empty_form(day_index, prefill_type, start_hour),
         "form_action": "/add",
@@ -600,7 +669,7 @@ def edit_form(request: Request, block_id: str):
         "trip": bundle.trip,
         "travelers": bundle.travelers,
         "session": session,
-        "vacation": logic.vacation_length(bundle.trip["starts_at"], bundle.trip["ends_at"]),
+        "vacation": logic.vacation_length(*_clock_bounds(bundle)),
         "days": bundle.days,
         "block_id": block_id,
         "form": {
