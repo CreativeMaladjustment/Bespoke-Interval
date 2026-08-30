@@ -169,6 +169,7 @@ def _block_sheet(b: dict, day_label: str) -> str:
         b["who"],
         facts,
         edit_href=f"/blocks/{b['id']}/edit",
+        edit_label="Edit block",
     )
 
 
@@ -315,6 +316,164 @@ def tickets_view(request: Request):
         "sheets": sheets,
     }
     return HTMLResponse(templates.tickets_page(ctx))
+
+
+def _parse_facts(text: str) -> list[dict]:
+    facts = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        k, _, v = line.partition(":")
+        facts.append({"k": k.strip(), "v": v.strip()})
+    return facts
+
+
+def _facts_to_text(facts: list[dict]) -> str:
+    return "\n".join(f"{f['k']}: {f['v']}" for f in facts)
+
+
+def _empty_ticket_form() -> dict:
+    return {
+        "category": "theatre",
+        "kind": "",
+        "title": "",
+        "venue": "",
+        "occurs_at": "",
+        "who": "Both",
+        "facts_text": "",
+        "sort_order": 0,
+    }
+
+
+@app.get("/tickets/add", response_class=HTMLResponse)
+def ticket_add_form(request: Request):
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
+    ctx = {
+        "trip": bundle.trip,
+        "travelers": bundle.travelers,
+        "session": session,
+        "vacation": logic.vacation_length(*_clock_bounds(bundle)),
+        "ticket_id": None,
+        "form": _empty_ticket_form(),
+        "form_action": "/tickets/add",
+    }
+    return HTMLResponse(templates.ticket_form_page(ctx))
+
+
+@app.post("/tickets/add", response_class=HTMLResponse)
+def ticket_add_submit(
+    request: Request,
+    category: str = Form(...),
+    kind: str = Form(...),
+    title: str = Form(...),
+    venue: str = Form(""),
+    occurs_at: str = Form(""),
+    who: str = Form("Both"),
+    facts_text: str = Form(""),
+    sort_order: int = Form(0),
+):
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
+    if category not in logic.INK:
+        return RedirectResponse("/tickets/add", status_code=303)
+    client = get_supabase_client()
+    client.table("tickets").insert(
+        {
+            "trip_id": bundle.trip["id"],
+            "category": category,
+            "kind": kind.strip(),
+            "title": title.strip(),
+            "venue": venue.strip() or None,
+            "occurs_at": _iso(_dest_local_dt(bundle.trip, occurs_at)),
+            "who": who,
+            "facts": _parse_facts(facts_text),
+            "sort_order": sort_order,
+        }
+    ).execute()
+    return RedirectResponse("/tickets", status_code=303)
+
+
+@app.get("/tickets/{ticket_id}/edit", response_class=HTMLResponse)
+def ticket_edit_form(request: Request, ticket_id: str):
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
+    ticket = bundle.ticket_by_id.get(ticket_id)
+    if not ticket:
+        return RedirectResponse("/tickets", status_code=303)
+    occurs_at = _parse_dt(ticket["occurs_at"]) if ticket.get("occurs_at") else None
+    ctx = {
+        "trip": bundle.trip,
+        "travelers": bundle.travelers,
+        "session": session,
+        "vacation": logic.vacation_length(*_clock_bounds(bundle)),
+        "ticket_id": ticket_id,
+        "form": {
+            "category": ticket["category"],
+            "kind": ticket["kind"],
+            "title": ticket["title"],
+            "venue": ticket.get("venue") or "",
+            "occurs_at": _dest_local_str(bundle.trip, occurs_at),
+            "who": ticket["who"],
+            "facts_text": _facts_to_text(ticket["facts"]),
+            "sort_order": ticket.get("sort_order") or 0,
+        },
+        "form_action": f"/tickets/{ticket_id}/edit",
+    }
+    return HTMLResponse(templates.ticket_form_page(ctx))
+
+
+@app.post("/tickets/{ticket_id}/edit", response_class=HTMLResponse)
+def ticket_edit_submit(
+    request: Request,
+    ticket_id: str,
+    category: str = Form(...),
+    kind: str = Form(...),
+    title: str = Form(...),
+    venue: str = Form(""),
+    occurs_at: str = Form(""),
+    who: str = Form("Both"),
+    facts_text: str = Form(""),
+    sort_order: int = Form(0),
+):
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
+    if category not in logic.INK:
+        return RedirectResponse(f"/tickets/{ticket_id}/edit", status_code=303)
+    client = get_supabase_client()
+    client.table("tickets").update(
+        {
+            "category": category,
+            "kind": kind.strip(),
+            "title": title.strip(),
+            "venue": venue.strip() or None,
+            "occurs_at": _iso(_dest_local_dt(bundle.trip, occurs_at)),
+            "who": who,
+            "facts": _parse_facts(facts_text),
+            "sort_order": sort_order,
+        }
+    ).eq("id", ticket_id).execute()
+    return RedirectResponse("/tickets", status_code=303)
+
+
+@app.post("/tickets/{ticket_id}/delete")
+def ticket_delete(request: Request, ticket_id: str):
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
+    client = get_supabase_client()
+    client.table("tickets").delete().eq("id", ticket_id).execute()
+    return RedirectResponse("/tickets", status_code=303)
 
 
 def _clock_bounds(bundle: "Bundle") -> tuple[datetime, datetime]:
