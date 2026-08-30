@@ -23,6 +23,11 @@ app = FastAPI()
 COOKIE_KWARGS = dict(httponly=True, samesite="lax", secure=os.getenv("VERCEL_ENV") is not None, max_age=60 * 60 * 24 * 30)
 
 
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "service": "bespoke-interval"}
+
+
 def _parse_dt(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
