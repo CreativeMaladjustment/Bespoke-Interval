@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 os.environ.setdefault("SUPABASE_URL", "https://example.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-key")
 os.environ.setdefault("SESSION_SECRET", "test-secret")
+os.environ.setdefault("PASSWORD", "test-password")
 
-import bcrypt
 from starlette.testclient import TestClient
 
 import main
@@ -26,7 +26,6 @@ JD_ID = "33333333-3333-3333-3333-333333333333"
 EMY_ID = "44444444-4444-4444-4444-444444444444"
 BLOCK_ID = "55555555-5555-5555-5555-555555555555"
 
-PIN_HASH = bcrypt.hashpw(b"4610", bcrypt.gensalt()).decode()
 
 
 def _trip_row():
@@ -36,7 +35,6 @@ def _trip_row():
         "name": "Thanksgiving, London",
         "home_timezone": "America/Denver",
         "destination_timezone": "Europe/London",
-        "pin_hash": PIN_HASH,
         "starts_at": "2026-11-22T09:15:00+00:00",
         "starts_terminal": "LHR T2",
         "ends_at": "2026-11-30T16:10:00+00:00",
@@ -153,15 +151,15 @@ def test_login_page_renders_travelers(mock_client):
 
 
 @patch("main.get_supabase_client", return_value=FakeClient())
-def test_login_wrong_pin_rejected(mock_client):
-    resp = client.post("/login", data={"traveler_id": JD_ID, "pin": "0000"})
+def test_login_wrong_password_rejected(mock_client):
+    resp = client.post("/login", data={"traveler_id": JD_ID, "password": "wrong-password"})
     assert resp.status_code == 401
     assert "match" in resp.text
 
 
 @patch("main.get_supabase_client", return_value=FakeClient())
-def test_login_correct_pin_sets_cookie_and_redirects(mock_client):
-    resp = client.post("/login", data={"traveler_id": JD_ID, "pin": "4610"})
+def test_login_correct_password_sets_cookie_and_redirects(mock_client):
+    resp = client.post("/login", data={"traveler_id": JD_ID, "password": "test-password"})
     assert resp.status_code == 303
     assert resp.headers["location"] == "/day/2"
     assert "bespoke_session" in resp.cookies

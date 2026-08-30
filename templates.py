@@ -324,34 +324,16 @@ def login_page(travelers: list[dict], trip_name: str, error: str | None = None) 
   <div class="serif" style="font-size:44px;line-height:1;margin-top:14px">{esc(name)},<br>
     <span class="italic">{esc(sub.strip())}</span></div>
   <div style="font:400 13px/1.6 'IBM Plex Sans',sans-serif;color:var(--ink-55);margin-top:12px;max-width:320px">
-    Nothing in here is public. Pick who you are, then enter the shared code.</div>
+    Nothing in here is public. Pick who you are, then enter the shared password.</div>
 
-  <form method="post" action="/login">
+  <form method="post" action="/login" style="margin-top:30px">
     <div class="people-picker">{people_html}</div>
 
     <div style="margin-top:30px">
-      <div class="label" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-        <span>Shared code</span>
-        <span class="pin-dots" id="pin-dots">
-          <span class="pin-dot"></span><span class="pin-dot"></span><span class="pin-dot"></span><span class="pin-dot"></span>
-        </span>
-      </div>
-      <input type="hidden" name="pin" id="pin-input" maxlength="4" pattern="[0-9]{{4}}" required>
-      <div class="pin-pad" id="pin-pad">
-        <button type="button" class="pin-key" data-k="1">1</button>
-        <button type="button" class="pin-key" data-k="2">2</button>
-        <button type="button" class="pin-key" data-k="3">3</button>
-        <button type="button" class="pin-key" data-k="4">4</button>
-        <button type="button" class="pin-key" data-k="5">5</button>
-        <button type="button" class="pin-key" data-k="6">6</button>
-        <button type="button" class="pin-key" data-k="7">7</button>
-        <button type="button" class="pin-key" data-k="8">8</button>
-        <button type="button" class="pin-key" data-k="9">9</button>
-        <button type="button" class="pin-key" disabled></button>
-        <button type="button" class="pin-key" data-k="0">0</button>
-        <button type="button" class="pin-key" data-k="back">&larr;</button>
-      </div>
+      <label for="password" class="label" style="display:block;margin-bottom:14px">Password</label>
+      <input type="password" name="password" id="password" required style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:4px;font:inherit;background:var(--ground);color:var(--ink-70)">
     </div>
+    <button type="submit" class="btn" style="width:100%;margin-top:22px">Sign in</button>
     {error_html}
   </form>
 </div>
