@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0e0d11;font-family:'IBM Plex Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#c9973f}a:hover{color:#e2b25e}
+*{box-sizing:border-box}
+::-webkit-scrollbar{width:0;height:0}
+@keyframes rise{from{transform:translateY(14px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+</style>
+</helmet>
+
+<div style="display:flex;align-items:flex-start;gap:64px;padding:56px 60px 80px;min-height:100vh">
+
+<div style="width:230px;flex:none;padding-top:10px">
+<div style="font:400 12px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#c9973f">Denver → London</div>
+<div style="font:400 40px/1.02 'Playfair Display',Georgia,serif;color:#f2ece1;margin-top:12px;letter-spacing:-.01em">Trip<br><span style="font-style:italic">Planner</span></div>
+<div style="height:1px;background:rgba(201,151,63,.28);margin:22px 0"></div>
+<div style="font:400 13px/1.7 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.6)">Every block is scheduled in London time. The flights set the boundaries: the vacation clock starts at wheels-down at Heathrow and stops at wheels-up for home. Travel padding is attached to each event, so a 19:30 curtain blocks 18:45 too.</div>
+<div style="height:1px;background:rgba(201,151,63,.28);margin:22px 0"></div>
+<div style="font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:rgba(242,236,225,.4);margin-bottom:13px">Block types</div>
+<div style="display:flex;flex-direction:column;gap:9px">
+<sc-for list="{{ legend }}" as="t" hint-placeholder-count="9">
+<div style="display:flex;align-items:center;gap:10px">
+<span style="width:10px;height:10px;border-radius:2px;flex:none;background:{{ t.ink }}"></span>
+<span style="font:400 12.5px/1 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.72)">{{ t.label }}</span>
+</div>
+</sc-for>
+<div style="display:flex;align-items:center;gap:10px;margin-top:3px">
+<span style="width:10px;height:10px;border-radius:2px;flex:none;border:1px dashed rgba(242,236,225,.45)"></span>
+<span style="font:400 12.5px/1 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.55)">Free — suggestion slot</span>
+</div>
+</div>
+<div style="height:1px;background:rgba(201,151,63,.28);margin:22px 0"></div>
+<div style="font:400 12px/1.65 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.38)">Both screens are live. Sign in with any four digits, page through days, open a ticket, add a block.</div>
+</div>
+
+<div style="position:relative;width:404px;height:854px;border-radius:52px;background:#000;padding:9px;box-shadow:0 40px 80px -26px rgba(0,0,0,.9);flex:none">
+<div style="position:relative;width:100%;height:100%;border-radius:44px;overflow:hidden;background:#16151a;display:flex;flex-direction:column">
+
+<div style="position:absolute;top:0;left:0;right:0;height:50px;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:17px 28px 0;pointer-events:none">
+<span style="font:500 13px/1 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.85)">{{ statusClock }}</span>
+<span style="display:flex;gap:5px;align-items:center">
+<span style="width:17px;height:9px;border:1.2px solid rgba(242,236,225,.6);border-radius:2px"></span>
+<span style="width:5px;height:9px;background:rgba(242,236,225,.6);border-radius:1px"></span>
+</span>
+</div>
+
+<sc-if value="{{ isSignin }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;display:flex;flex-direction:column;padding:88px 28px 30px;animation:fade .4s ease;background:radial-gradient(120% 60% at 50% 0%,#221f26 0%,#16151a 62%)">
+<div style="font:400 11px/1 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#c9973f">Private · two travellers</div>
+<div style="font:400 50px/1 'Playfair Display',Georgia,serif;color:#f2ece1;margin-top:16px;letter-spacing:-.02em">London,<br><span style="font-style:italic;color:#c9973f">October</span></div>
+<div style="font:400 13px/1.6 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.5);margin-top:14px;max-width:250px">Nothing in here is public. Pick who you are, then enter the shared code.</div>
+
+<div style="display:flex;gap:10px;margin-top:30px">
+<sc-for list="{{ people }}" as="p" hint-placeholder-count="2">
+<div onClick="{{ p.pick }}" style="flex:1;cursor:pointer;padding:15px 14px 14px;border-radius:16px;border:1px solid {{ p.border }};background:{{ p.bg }};display:flex;flex-direction:column;gap:11px;transition:border-color .18s ease" style-hover="border-color:rgba(201,151,63,.75)">
+<span style="width:36px;height:36px;border-radius:50%;background:{{ p.chip }};color:#16151a;font:500 14px/36px 'IBM Plex Sans',sans-serif;text-align:center">{{ p.initial }}</span>
+<span style="font:500 14.5px/1 'IBM Plex Sans',sans-serif;color:#f2ece1">{{ p.name }}</span>
+<span style="font:400 10.5px/1 'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:rgba(242,236,225,.4)">{{ p.role }}</span>
+</div>
+</sc-for>
+</div>
+
+<div style="margin-top:auto">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+<span style="font:400 11px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:rgba(242,236,225,.45)">{{ pinLabel }}</span>
+<span style="display:flex;gap:8px">
+<sc-for list="{{ pinDots }}" as="d" hint-placeholder-count="4">
+<span style="width:9px;height:9px;border-radius:50%;background:{{ d.bg }};border:1px solid rgba(201,151,63,.55)"></span>
+</sc-for>
+</span>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+<sc-for list="{{ keys }}" as="k" hint-placeholder-count="12">
+<div onClick="{{ k.tap }}" style="height:54px;border-radius:13px;background:rgba(242,236,225,.05);display:flex;align-items:center;justify-content:center;cursor:pointer;font:400 20px/1 'IBM Plex Sans',sans-serif;color:{{ k.fg }};border:1px solid rgba(242,236,225,.09);transition:background .15s ease" style-hover="background:rgba(201,151,63,.16)">{{ k.label }}</div>
+</sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isDay }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;display:flex;flex-direction:column;min-height:0;animation:rise .3s ease">
+<div style="padding:56px 20px 0;background:#1c1a20;border-bottom:1px solid rgba(201,151,63,.2)">
+<div style="display:flex;align-items:flex-end;justify-content:space-between">
+<div>
+<div style="font:400 10.5px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#c9973f">{{ dayKicker }}</div>
+<div style="font:400 30px/1.1 'Playfair Display',Georgia,serif;color:#f2ece1;margin-top:7px">{{ dayTitle }}</div>
+</div>
+<div onClick="{{ toggleTz }}" style="cursor:pointer;padding:8px 11px;border-radius:9px;border:1px solid rgba(201,151,63,.4);font:500 10.5px/1 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#c9973f">{{ tzChip }}</div>
+</div>
+<div style="display:flex;gap:6px;margin-top:16px;overflow-x:auto;padding-bottom:12px">
+<sc-for list="{{ dayChips }}" as="c" hint-placeholder-count="10">
+<div onClick="{{ c.pick }}" style="flex:none;cursor:pointer;width:46px;padding:8px 0 9px;border-radius:11px;text-align:center;background:{{ c.bg }};border:1px solid {{ c.border }}">
+<div style="font:400 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:{{ c.sub }}">{{ c.dow }}</div>
+<div style="font:500 15px/1 'IBM Plex Sans',sans-serif;color:{{ c.fg }};margin-top:6px">{{ c.dom }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="padding:11px 20px;display:flex;gap:14px;background:#16151a;border-bottom:1px solid rgba(242,236,225,.08)">
+<sc-for list="{{ dayStats }}" as="s" hint-placeholder-count="3">
+<div>
+<div style="font:400 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.09em;text-transform:uppercase;color:rgba(242,236,225,.38)">{{ s.label }}</div>
+<div style="font:500 13px/1 'IBM Plex Sans',sans-serif;color:{{ s.ink }};margin-top:5px">{{ s.value }}</div>
+</div>
+</sc-for>
+</div>
+
+<div style="flex:1;overflow-y:auto;padding:10px 20px 96px">
+<div style="position:relative;height:{{ railH }}px">
+<sc-for list="{{ hours }}" as="h" hint-placeholder-count="16">
+<div style="position:absolute;left:0;right:0;top:{{ h.top }}px;height:1px;background:rgba(242,236,225,.07)"></div>
+<div style="position:absolute;left:0;top:{{ h.labelTop }}px;font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(242,236,225,.32)">{{ h.label }}</div>
+</sc-for>
+<div style="position:absolute;left:44px;right:0;top:0;bottom:0">
+<sc-for list="{{ blocks }}" as="b" hint-placeholder-count="6">
+<div onClick="{{ b.tap }}" style="position:absolute;left:{{ b.left }};width:{{ b.width }};top:{{ b.top }}px;height:{{ b.h }}px;cursor:pointer;border-radius:10px;overflow:hidden;background:{{ b.bg }};border:1px solid {{ b.border }};border-left:3px solid {{ b.ink }};padding:{{ b.pad }};display:flex;flex-direction:column;gap:2px;transition:transform .15s ease" style-hover="transform:translateX(2px)">
+<sc-if value="{{ b.wide }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex:none">
+<span style="font:500 13px/16px 'IBM Plex Sans',sans-serif;color:#f2ece1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ b.title }}</span>
+<span style="font:400 10px/16px 'IBM Plex Mono',monospace;color:{{ b.ink }};flex:none">{{ b.range }}</span>
+</div>
+</sc-if>
+<sc-if value="{{ b.narrow }}" hint-placeholder-val="{{ null }}">
+<div style="font:500 12.5px/15px 'IBM Plex Sans',sans-serif;color:#f2ece1;flex:none">{{ b.title }}</div>
+<sc-if value="{{ b.showRange }}" hint-placeholder-val="{{ true }}">
+<div style="font:400 9.5px/12px 'IBM Plex Mono',monospace;color:{{ b.ink }};flex:none">{{ b.range }}</div>
+</sc-if>
+</sc-if>
+<sc-if value="{{ b.showSub }}" hint-placeholder-val="{{ true }}">
+<div style="font:400 11px/15px 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.5);overflow:hidden;flex:none">{{ b.sub }}</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isTickets }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;overflow-y:auto;padding:58px 20px 100px;animation:rise .3s ease">
+<div style="font:400 10.5px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#c9973f">Bought &amp; booked</div>
+<div style="font:400 32px/1.08 'Playfair Display',Georgia,serif;color:#f2ece1;margin-top:8px">Tickets</div>
+<div style="display:flex;flex-direction:column;gap:11px;margin-top:20px">
+<sc-for list="{{ tickets }}" as="t" hint-placeholder-count="4">
+<div onClick="{{ t.tap }}" style="cursor:pointer;border-radius:14px;background:#1e1c22;border:1px solid {{ t.border }};overflow:hidden">
+<div style="padding:14px 15px;display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:center;gap:8px">
+<span style="width:8px;height:8px;border-radius:2px;background:{{ t.ink }}"></span>
+<span style="font:400 10px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:{{ t.ink }}">{{ t.kind }}</span>
+<span style="margin-left:auto;font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(242,236,225,.4)">{{ t.who }}</span>
+</div>
+<div style="font:400 21px/1.15 'Playfair Display',Georgia,serif;color:#f2ece1">{{ t.title }}</div>
+<div style="font:400 12px/1.5 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.55)">{{ t.venue }}</div>
+</div>
+<div style="display:flex;border-top:1px dashed rgba(242,236,225,.18)">
+<sc-for list="{{ t.facts }}" as="f" hint-placeholder-count="3">
+<div style="flex:1;padding:11px 12px;border-right:1px solid rgba(242,236,225,.07)">
+<div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.09em;text-transform:uppercase;color:rgba(242,236,225,.35)">{{ f.k }}</div>
+<div style="font:500 12px/1.3 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.85);margin-top:5px">{{ f.v }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isFlights }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;overflow-y:auto;padding:58px 20px 100px;animation:rise .3s ease">
+<div style="font:400 10.5px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#c9973f">Trip boundaries</div>
+<div style="font:400 32px/1.08 'Playfair Display',Georgia,serif;color:#f2ece1;margin-top:8px">Flights</div>
+
+<div style="margin-top:18px;border-radius:16px;padding:18px;background:linear-gradient(150deg,#2a2530,#1b1a1f);border:1px solid rgba(201,151,63,.35)">
+<div style="font:400 10px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#c9973f">Vacation clock</div>
+<div style="font:400 29px/1.1 'Playfair Display',Georgia,serif;color:#f2ece1;margin-top:10px">{{ vacationLength }} <span style="font-style:italic;font-size:18px;color:rgba(242,236,225,.55)">on the ground</span></div>
+<div style="display:flex;gap:12px;margin-top:16px">
+<sc-if value="{{ true }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;padding-top:11px;border-top:1px solid rgba(201,151,63,.3)">
+<div style="font:400 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.09em;text-transform:uppercase;color:rgba(242,236,225,.4)">Starts · wheels down</div>
+<div style="font:500 13px/1.4 'IBM Plex Sans',sans-serif;color:#f2ece1;margin-top:6px">Sun 4 Oct · 11:45<br><span style="font-weight:400;color:rgba(242,236,225,.5)">LHR T2</span></div>
+</div>
+<div style="flex:1;padding-top:11px;border-top:1px solid rgba(201,151,63,.3)">
+<div style="font:400 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.09em;text-transform:uppercase;color:rgba(242,236,225,.4)">Ends · wheels up</div>
+<div style="font:500 13px/1.4 'IBM Plex Sans',sans-serif;color:#f2ece1;margin-top:6px">Mon 12 Oct · 15:20<br><span style="font-weight:400;color:rgba(242,236,225,.5)">LHR T5</span></div>
+</div>
+</sc-if>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+<sc-for list="{{ flights }}" as="f" hint-placeholder-count="4">
+<div style="border-radius:14px;background:#1e1c22;border:1px solid rgba(242,236,225,.09);padding:14px 15px">
+<div style="display:flex;align-items:center;gap:9px">
+<span style="font:400 10px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#8fa2bd">{{ f.leg }}</span>
+<span style="margin-left:auto;font:500 11px/1 'IBM Plex Mono',monospace;color:rgba(242,236,225,.55)">{{ f.code }}</span>
+</div>
+<div style="display:flex;align-items:flex-end;gap:12px;margin-top:12px">
+<div>
+<div style="font:400 24px/1 'Playfair Display',Georgia,serif;color:#f2ece1">{{ f.fromCode }}</div>
+<div style="font:400 11px/1 'IBM Plex Mono',monospace;color:rgba(242,236,225,.45);margin-top:6px">{{ f.dep }}</div>
+</div>
+<div style="flex:1;height:1px;background:rgba(201,151,63,.4);margin-bottom:14px"></div>
+<div style="text-align:right">
+<div style="font:400 24px/1 'Playfair Display',Georgia,serif;color:#f2ece1">{{ f.toCode }}</div>
+<div style="font:400 11px/1 'IBM Plex Mono',monospace;color:rgba(242,236,225,.45);margin-top:6px">{{ f.arr }}</div>
+</div>
+</div>
+<div style="font:400 11.5px/1.5 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.5);margin-top:12px;padding-top:11px;border-top:1px solid rgba(242,236,225,.08)">{{ f.note }}</div>
+</div>
+</sc-for>
+</div>
+
+<div onClick="{{ goAdd }}" style="margin-top:16px;cursor:pointer;text-align:center;padding:14px;border-radius:13px;border:1px dashed rgba(201,151,63,.5);font:500 12.5px/1 'IBM Plex Sans',sans-serif;color:#c9973f">+ Add a flight or train leg</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isAdd }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;display:flex;flex-direction:column;min-height:0;animation:rise .3s ease">
+<div style="padding:56px 20px 16px;border-bottom:1px solid rgba(242,236,225,.09)">
+<div style="display:flex;align-items:center;justify-content:space-between">
+<div onClick="{{ goDay }}" style="cursor:pointer;font:400 12px/1 'IBM Plex Mono',monospace;color:rgba(242,236,225,.5)">Cancel</div>
+<div style="font:400 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:rgba(242,236,225,.4)">{{ formDayLabel }}</div>
+<div onClick="{{ saveBlock }}" style="cursor:pointer;font:500 12px/1 'IBM Plex Mono',monospace;color:#c9973f">Save</div>
+</div>
+<div style="font:400 30px/1.1 'Playfair Display',Georgia,serif;color:#f2ece1;margin-top:16px">New block</div>
+</div>
+<div style="flex:1;overflow-y:auto;padding:18px 20px 100px">
+<div style="font:400 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:rgba(242,236,225,.4)">Type</div>
+<div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:11px">
+<sc-for list="{{ typeChips }}" as="c" hint-placeholder-count="9">
+<div onClick="{{ c.pick }}" style="cursor:pointer;display:flex;align-items:center;gap:7px;padding:9px 12px;border-radius:20px;background:{{ c.bg }};border:1px solid {{ c.border }}">
+<span style="width:8px;height:8px;border-radius:2px;background:{{ c.ink }}"></span>
+<span style="font:500 12px/1 'IBM Plex Sans',sans-serif;color:{{ c.fg }}">{{ c.label }}</span>
+</div>
+</sc-for>
+</div>
+
+<div style="font:400 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:rgba(242,236,225,.4);margin-top:26px">What</div>
+<input value="{{ formTitle }}" onChange="{{ setTitle }}" placeholder="Name this block" style="margin-top:10px;width:100%;padding:14px;border-radius:12px;background:#1e1c22;border:1px solid rgba(242,236,225,.12);color:#f2ece1;font:400 14px/1 'IBM Plex Sans',sans-serif;outline:none">
+
+<div style="display:flex;gap:10px;margin-top:12px">
+<div style="flex:1">
+<div style="font:400 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:rgba(242,236,225,.4)">Start · London</div>
+<div style="display:flex;align-items:center;gap:8px;margin-top:10px;padding:13px 14px;border-radius:12px;background:#1e1c22;border:1px solid rgba(242,236,225,.12)">
+<span onClick="{{ startDown }}" style="cursor:pointer;font:400 16px/1 'IBM Plex Sans',sans-serif;color:#c9973f">−</span>
+<span style="flex:1;text-align:center;font:500 15px/1 'IBM Plex Mono',monospace;color:#f2ece1">{{ formStart }}</span>
+<span onClick="{{ startUp }}" style="cursor:pointer;font:400 16px/1 'IBM Plex Sans',sans-serif;color:#c9973f">+</span>
+</div>
+<div style="font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(242,236,225,.32);margin-top:7px">{{ formStartDen }} in Denver</div>
+</div>
+<div style="flex:1">
+<div style="font:400 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:rgba(242,236,225,.4)">Length</div>
+<div style="display:flex;align-items:center;gap:8px;margin-top:10px;padding:13px 14px;border-radius:12px;background:#1e1c22;border:1px solid rgba(242,236,225,.12)">
+<span onClick="{{ durDown }}" style="cursor:pointer;font:400 16px/1 'IBM Plex Sans',sans-serif;color:#c9973f">−</span>
+<span style="flex:1;text-align:center;font:500 15px/1 'IBM Plex Mono',monospace;color:#f2ece1">{{ formDur }}</span>
+<span onClick="{{ durUp }}" style="cursor:pointer;font:400 16px/1 'IBM Plex Sans',sans-serif;color:#c9973f">+</span>
+</div>
+<div style="font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(242,236,225,.32);margin-top:7px">ends {{ formEnd }}</div>
+</div>
+</div>
+
+<div onClick="{{ togglePad }}" style="cursor:pointer;margin-top:22px;padding:15px;border-radius:13px;background:{{ padBg }};border:1px solid {{ padBorder }};display:flex;align-items:center;gap:13px">
+<div style="width:44px;height:26px;border-radius:14px;flex:none;background:{{ padTrackBg }};position:relative;transition:background .2s ease">
+<div style="position:absolute;top:3px;left:{{ padKnobLeft }}px;width:20px;height:20px;border-radius:50%;background:#f2ece1;transition:left .2s ease"></div>
+</div>
+<div>
+<div style="font:500 13px/1.3 'IBM Plex Sans',sans-serif;color:#f2ece1">Block travel to this event</div>
+<div style="font:400 11.5px/1.4 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.5);margin-top:4px">{{ padNote }}</div>
+</div>
+</div>
+
+<div style="margin-top:14px;padding:15px;border-radius:13px;background:#1e1c22;border:1px solid rgba(242,236,225,.1)">
+<div style="font:400 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:rgba(242,236,225,.4)">Who's going</div>
+<div style="display:flex;gap:8px;margin-top:12px">
+<sc-for list="{{ whoChips }}" as="w" hint-placeholder-count="3">
+<div onClick="{{ w.pick }}" style="flex:1;cursor:pointer;text-align:center;padding:11px 0;border-radius:10px;background:{{ w.bg }};border:1px solid {{ w.border }};font:500 12.5px/1 'IBM Plex Sans',sans-serif;color:{{ w.fg }}">{{ w.label }}</div>
+</sc-for>
+</div>
+</div>
+
+<div style="margin-top:14px;font:400 11.5px/1.6 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.4)">{{ conflictNote }}</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ showTabs }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;bottom:0;left:0;right:0;padding:10px 16px 22px;background:linear-gradient(#16151acc,#16151a 40%);backdrop-filter:blur(8px);border-top:1px solid rgba(242,236,225,.08);display:flex;gap:6px;z-index:30">
+<sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+<div onClick="{{ t.pick }}" style="flex:1;cursor:pointer;padding:9px 0;border-radius:11px;text-align:center;background:{{ t.bg }};transition:background .18s ease">
+<div style="font:500 11.5px/1 'IBM Plex Sans',sans-serif;color:{{ t.fg }}">{{ t.label }}</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ sheet }}" hint-placeholder-val="{{ null }}">
+<div onClick="{{ closeSheet }}" style="position:absolute;inset:0;z-index:50;background:rgba(10,9,12,.68);display:flex;align-items:flex-end;animation:fade .2s ease">
+<div style="width:100%;background:#1e1c22;border-top:1px solid rgba(201,151,63,.45);border-radius:24px 24px 0 0;padding:22px 22px 30px;animation:rise .28s ease">
+<div style="width:38px;height:4px;border-radius:2px;background:rgba(242,236,225,.2);margin:0 auto 18px"></div>
+<div style="display:flex;align-items:center;gap:8px">
+<span style="width:8px;height:8px;border-radius:2px;background:{{ sheet.ink }}"></span>
+<span style="font:400 10px/1 'IBM Plex Mono',monospace;letter-spacing:.11em;text-transform:uppercase;color:{{ sheet.ink }}">{{ sheet.kind }}</span>
+<span style="margin-left:auto;font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(242,236,225,.4)">{{ sheet.who }}</span>
+</div>
+<div style="font:400 27px/1.12 'Playfair Display',Georgia,serif;color:#f2ece1;margin-top:12px">{{ sheet.title }}</div>
+<div style="font:400 12.5px/1.55 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.55);margin-top:8px">{{ sheet.sub }}</div>
+<div style="display:flex;flex-wrap:wrap;margin-top:18px;border-top:1px dashed rgba(242,236,225,.18);padding-top:4px">
+<sc-for list="{{ sheet.facts }}" as="f" hint-placeholder-count="4">
+<div style="width:50%;padding:12px 0">
+<div style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:rgba(242,236,225,.35)">{{ f.k }}</div>
+<div style="font:500 13px/1.35 'IBM Plex Sans',sans-serif;color:#f2ece1;margin-top:6px">{{ f.v }}</div>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;gap:9px;margin-top:14px">
+<div onClick="{{ closeSheet }}" style="flex:1;cursor:pointer;text-align:center;padding:14px;border-radius:12px;background:rgba(201,151,63,.16);border:1px solid rgba(201,151,63,.5);font:500 13px/1 'IBM Plex Sans',sans-serif;color:#e2b25e">Edit block</div>
+<div onClick="{{ closeSheet }}" style="flex:1;cursor:pointer;text-align:center;padding:14px;border-radius:12px;border:1px solid rgba(242,236,225,.14);font:500 13px/1 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.65)">Directions</div>
+</div>
+</div>
+</div>
+</sc-if>
+
+</div>
+</div>
+
+<div style="width:1180px;flex:none">
+<div style="border-radius:14px;overflow:hidden;background:#1a181e;border:1px solid rgba(242,236,225,.1);box-shadow:0 40px 80px -30px rgba(0,0,0,.9)">
+<div style="height:42px;display:flex;align-items:center;gap:14px;padding:0 14px;background:#232028;border-bottom:1px solid rgba(242,236,225,.08)">
+<div style="display:flex;gap:7px">
+<span style="width:11px;height:11px;border-radius:50%;background:#c9973f"></span>
+<span style="width:11px;height:11px;border-radius:50%;background:rgba(242,236,225,.22)"></span>
+<span style="width:11px;height:11px;border-radius:50%;background:rgba(242,236,225,.22)"></span>
+</div>
+<div style="flex:1;max-width:420px;height:24px;border-radius:7px;background:#16151a;display:flex;align-items:center;padding:0 10px;font:400 11px/1 'IBM Plex Mono',monospace;color:rgba(242,236,225,.42)">trip.private / london-october</div>
+</div>
+
+<div style="display:flex;min-height:720px">
+<div style="width:196px;flex:none;padding:22px 16px;border-right:1px solid rgba(242,236,225,.08);background:#1c1a20">
+<div style="font:400 21px/1.15 'Playfair Display',Georgia,serif;color:#f2ece1">London<br><span style="font-style:italic;color:#c9973f">October</span></div>
+<div style="display:flex;flex-direction:column;gap:3px;margin-top:24px">
+<sc-for list="{{ deskNav }}" as="n" hint-placeholder-count="5">
+<div onClick="{{ n.pick }}" style="cursor:pointer;padding:9px 11px;border-radius:9px;background:{{ n.bg }};font:500 12.5px/1 'IBM Plex Sans',sans-serif;color:{{ n.fg }}">{{ n.label }}</div>
+</sc-for>
+</div>
+<div style="height:1px;background:rgba(242,236,225,.1);margin:22px 0"></div>
+<div style="font:400 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.11em;text-transform:uppercase;color:rgba(242,236,225,.36)">Signed in</div>
+<div style="display:flex;flex-direction:column;gap:9px;margin-top:12px">
+<sc-for list="{{ people }}" as="p" hint-placeholder-count="2">
+<div style="display:flex;align-items:center;gap:9px">
+<span style="width:24px;height:24px;border-radius:50%;background:{{ p.chip }};color:#16151a;font:500 11px/24px 'IBM Plex Sans',sans-serif;text-align:center">{{ p.initial }}</span>
+<span style="font:400 12px/1 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.7)">{{ p.name }}</span>
+</div>
+</sc-for>
+</div>
+<div style="margin-top:26px;padding:13px;border-radius:11px;border:1px solid rgba(201,151,63,.3);background:rgba(201,151,63,.07)">
+<div style="font:400 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#c9973f">On the ground</div>
+<div style="font:400 22px/1.1 'Playfair Display',Georgia,serif;color:#f2ece1;margin-top:8px">{{ vacationLength }}</div>
+<div style="font:400 11px/1.45 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.45);margin-top:7px">4 Oct 11:45 → 12 Oct 15:20, London time</div>
+</div>
+</div>
+
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<div style="padding:20px 24px 14px;border-bottom:1px solid rgba(242,236,225,.08);display:flex;align-items:flex-end;gap:18px">
+<div>
+<div style="font:400 10px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#c9973f">Week view · London time</div>
+<div style="font:400 27px/1.1 'Playfair Display',Georgia,serif;color:#f2ece1;margin-top:8px">{{ weekTitle }}</div>
+</div>
+<div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+<div onClick="{{ toggleTz }}" style="cursor:pointer;padding:8px 12px;border-radius:9px;border:1px solid rgba(201,151,63,.4);font:500 10.5px/1 'IBM Plex Mono',monospace;color:#c9973f">{{ tzChip }}</div>
+<div onClick="{{ goAdd }}" style="cursor:pointer;padding:9px 14px;border-radius:9px;background:#c9973f;font:500 11.5px/1 'IBM Plex Sans',sans-serif;color:#16151a">+ New block</div>
+</div>
+</div>
+
+<div style="flex:1;display:flex;min-height:0">
+<div style="flex:1;min-width:0;overflow:hidden;padding:0 8px 18px 0">
+<div style="display:flex;padding:11px 0 9px 52px;border-bottom:1px solid rgba(242,236,225,.08)">
+<sc-for list="{{ week }}" as="c" hint-placeholder-count="5">
+<div onClick="{{ c.pick }}" style="flex:1;cursor:pointer;padding-left:6px">
+<div style="font:400 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:{{ c.sub }}">{{ c.dow }} {{ c.dom }}</div>
+<div style="font:500 12px/1 'IBM Plex Sans',sans-serif;color:{{ c.fg }};margin-top:6px">{{ c.tag }}</div>
+</div>
+</sc-for>
+</div>
+<div style="position:relative;height:{{ deskRailH }}px;margin-top:6px">
+<sc-for list="{{ deskHours }}" as="h" hint-placeholder-count="15">
+<div style="position:absolute;left:52px;right:0;top:{{ h.top }}px;height:1px;background:rgba(242,236,225,.06)"></div>
+<div style="position:absolute;left:8px;top:{{ h.labelTop }}px;font:400 9.5px/1 'IBM Plex Mono',monospace;color:rgba(242,236,225,.3)">{{ h.label }}</div>
+</sc-for>
+<div style="position:absolute;left:52px;right:0;top:0;bottom:0;display:flex">
+<sc-for list="{{ week }}" as="c" hint-placeholder-count="5">
+<div style="flex:1;position:relative;border-left:1px solid rgba(242,236,225,.06);padding:0 4px">
+<sc-for list="{{ c.blocks }}" as="b" hint-placeholder-count="4">
+<div onClick="{{ b.tap }}" style="position:absolute;left:{{ b.left }};width:{{ b.width }};margin-left:3px;top:{{ b.top }}px;height:{{ b.h }}px;cursor:pointer;border-radius:7px;overflow:hidden;background:{{ b.bg }};border:1px solid {{ b.border }};border-left:3px solid {{ b.ink }};padding:4px 6px;display:flex;flex-direction:column;gap:2px">
+<div style="font:500 10.5px/13px 'IBM Plex Sans',sans-serif;color:#f2ece1;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:{{ b.lines }};overflow-wrap:break-word">{{ b.title }}</div>
+<sc-if value="{{ b.showStart }}" hint-placeholder-val="{{ null }}">
+<div style="font:400 8.5px/11px 'IBM Plex Mono',monospace;color:{{ b.ink }};opacity:.8;flex:none;white-space:nowrap">{{ b.startOnly }}</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+
+<div style="width:264px;flex:none;border-left:1px solid rgba(242,236,225,.08);padding:16px 16px 20px;overflow-y:auto;background:#1c1a20">
+<div style="font:400 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#c9973f">Free windows · {{ dayTitle }}</div>
+<div style="display:flex;flex-direction:column;gap:9px;margin-top:12px">
+<sc-for list="{{ suggestions }}" as="s" hint-placeholder-count="3">
+<div style="padding:12px;border-radius:11px;border:1px dashed rgba(242,236,225,.22);background:rgba(242,236,225,.03)">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<span style="font:500 12px/1 'IBM Plex Mono',monospace;color:#f2ece1">{{ s.range }}</span>
+<span style="font:400 10px/1 'IBM Plex Mono',monospace;color:rgba(242,236,225,.42)">{{ s.len }}</span>
+</div>
+<div style="font:400 11.5px/1.45 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.6);margin-top:7px">{{ s.hint }}</div>
+<div onClick="{{ s.fill }}" style="cursor:pointer;margin-top:9px;font:500 10.5px/1 'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:#c9973f">Fill this slot →</div>
+</div>
+</sc-for>
+</div>
+<div style="height:1px;background:rgba(242,236,225,.1);margin:20px 0"></div>
+<div style="font:400 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#c9973f">Timed &amp; ticketed</div>
+<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+<sc-for list="{{ tickets }}" as="t" hint-placeholder-count="4">
+<div onClick="{{ t.tap }}" style="cursor:pointer;padding:11px 12px;border-radius:11px;background:#221f27;border:1px solid {{ t.border }}">
+<div style="display:flex;align-items:center;gap:7px">
+<span style="width:7px;height:7px;border-radius:2px;background:{{ t.ink }}"></span>
+<span style="font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:{{ t.ink }}">{{ t.kind }}</span>
+</div>
+<div style="font:400 15px/1.2 'Playfair Display',Georgia,serif;color:#f2ece1;margin-top:7px">{{ t.title }}</div>
+<div style="font:400 10.5px/1.4 'IBM Plex Mono',monospace;color:rgba(242,236,225,.45);margin-top:5px">{{ t.when }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div style="font:400 11.5px/1.6 'IBM Plex Mono',monospace;color:rgba(242,236,225,.35);margin-top:14px">Desktop and phone share one state — pick a day in either and both follow.</div>
+</div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1980,&quot;height&quot;:1000}}">
+const INK = {
+  travel:{label:'Flight & airport',ink:'#8fa2bd'},
+  transit:{label:'Travel to event',ink:'#6d7a8c'},
+  theatre:{label:'Theatre',ink:'#c9973f'},
+  meal:{label:'Meal',ink:'#c07555'},
+  walk:{label:'Walking',ink:'#7f9c6e'},
+  museum:{label:'Museum',ink:'#9182b8'},
+  library:{label:'Library',ink:'#5d97a1'},
+  tourist:{label:'Tourist attraction',ink:'#b0687f'},
+  rest:{label:'Hotel & rest',ink:'#6a6572'}
+};
+const DAYS = [
+  {dow:'Fri',dom:'3',date:'Fri 3 Oct',kicker:'Denver → in the air',tag:'Depart DEN',blocks:[
+    {s:12.5,e:14,t:'transit',title:'Drive to DEN',sub:'A-Line from Union Station · 45 min',who:'Both'},
+    {s:14,e:16.5,t:'travel',title:'DEN Terminal · check bags',sub:'UA 928 · gate B44',who:'Both'},
+    {s:16.5,e:22.99,t:'travel',title:'UA 928 DEN → LHR',sub:'Overnight · 8h 45m · lands 11:45 tomorrow',who:'Both'}
+  ]},
+  {dow:'Sat',dom:'4',date:'Sat 4 Oct',kicker:'Vacation clock starts 11:45',tag:'Land LHR',blocks:[
+    {s:11.75,e:13,t:'travel',title:'Land LHR T2 · border',sub:'Wheels down 11:45 — trip officially starts',who:'Both'},
+    {s:13,e:14.25,t:'transit',title:'Heathrow Express + tube',sub:'Paddington → Russell Square',who:'Both'},
+    {s:14.25,e:15,t:'rest',title:'Hotel check-in, drop bags',sub:'Bloomsbury · room ready 14:00',who:'Both'},
+    {s:15,e:16.75,t:'walk',title:'Walk: Bloomsbury squares',sub:'Slow loop to shake off the flight',who:'Both'},
+    {s:17,e:18.25,t:'meal',title:'Early dinner',sub:'Booked 17:00 · 8 min walk from hotel',who:'Both'},
+    {s:18.5,e:19.25,t:'transit',title:'Travel to the Aldwych',sub:'Auto-blocked for the 19:30 curtain',who:'Both'},
+    {s:19.5,e:22.25,t:'theatre',title:'The Winter Ledger',sub:'Aldwych Theatre · stalls H12–H13',who:'Both'}
+  ]},
+  {dow:'Sun',dom:'5',date:'Sun 5 Oct',kicker:'First full day',tag:'Museums',blocks:[
+    {s:9,e:9.75,t:'meal',title:'Breakfast at the hotel',sub:'',who:'Both'},
+    {s:10,e:12.5,t:'museum',title:'British Museum',sub:'Timed entry 10:00 · Rosetta room first',who:'Both'},
+    {s:12.75,e:13.75,t:'meal',title:'Lunch, Lamb\u0027s Conduit St',sub:'No booking — walk-in',who:'Both'},
+    {s:16,e:17.5,t:'tourist',title:'London Eye',sub:'Timed slot 16:15 · sunset rotation',who:'Both'},
+    {s:19,e:20.5,t:'meal',title:'Dinner in Covent Garden',sub:'Booked 19:00 for two',who:'Both'}
+  ]},
+  {dow:'Mon',dom:'6',date:'Mon 6 Oct',kicker:'Reading day',tag:'Library',blocks:[
+    {s:9.5,e:10.25,t:'meal',title:'Coffee & pastry',sub:'',who:'Both'},
+    {s:10.5,e:13,t:'library',title:'British Library reading rooms',sub:'Reader pass collected on arrival',who:'Dana'},
+    {s:10.5,e:12.5,t:'walk',title:'Walk: Regent\u0027s Canal',sub:'King\u0027s Cross → Camden',who:'Chris'},
+    {s:13.25,e:14.25,t:'meal',title:'Lunch, Granary Square',sub:'',who:'Both'},
+    {s:18.75,e:19.25,t:'transit',title:'Travel to the Barbican',sub:'Auto-blocked for the 19:45 curtain',who:'Both'},
+    {s:19.75,e:22,t:'theatre',title:'Measure for Measure',sub:'Barbican · circle D4–D5',who:'Both'}
+  ]},
+  {dow:'Tue',dom:'7',date:'Tue 7 Oct',kicker:'Open day',tag:'Free',blocks:[
+    {s:9,e:9.75,t:'meal',title:'Breakfast',sub:'',who:'Both'},
+    {s:14,e:16,t:'museum',title:'Sir John Soane\u0027s Museum',sub:'Free entry · queue before 14:00',who:'Both'},
+    {s:19.5,e:21,t:'meal',title:'Dinner, Spitalfields',sub:'',who:'Both'}
+  ]},
+  {dow:'Wed',dom:'8',date:'Wed 8 Oct',kicker:'Day trip',tag:'Greenwich',blocks:[
+    {s:9.5,e:10.5,t:'transit',title:'Thames Clipper to Greenwich',sub:'Embankment pier',who:'Both'},
+    {s:10.5,e:13,t:'tourist',title:'Royal Observatory',sub:'Timed 11:00',who:'Both'},
+    {s:13,e:14,t:'meal',title:'Lunch at the market',sub:'',who:'Both'},
+    {s:14,e:16,t:'walk',title:'Walk: Greenwich Park',sub:'',who:'Both'}
+  ]},
+  {dow:'Thu',dom:'9',date:'Thu 9 Oct',kicker:'Matinee day',tag:'Matinee',blocks:[
+    {s:10,e:12,t:'museum',title:'National Gallery',sub:'Room 32 onward',who:'Both'},
+    {s:12.25,e:13.25,t:'meal',title:'Lunch off Trafalgar Sq',sub:'',who:'Both'},
+    {s:13.5,e:14,t:'transit',title:'Walk to the theatre',sub:'Auto-blocked for the 14:30 matinee',who:'Both'},
+    {s:14.5,e:17,t:'theatre',title:'A Number (matinee)',sub:'Duke of York\u0027s · row F',who:'Both'},
+    {s:19,e:20.5,t:'meal',title:'Dinner, Soho',sub:'',who:'Both'}
+  ]},
+  {dow:'Fri',dom:'10',date:'Fri 10 Oct',kicker:'Slow day',tag:'Open',blocks:[
+    {s:9.5,e:10.5,t:'meal',title:'Breakfast',sub:'',who:'Both'},
+    {s:11,e:13.5,t:'walk',title:'Walk: South Bank to Tate',sub:'',who:'Both'},
+    {s:19,e:20.5,t:'meal',title:'Dinner near the hotel',sub:'',who:'Both'}
+  ]},
+  {dow:'Sat',dom:'11',date:'Sat 11 Oct',kicker:'Last full day',tag:'Last day',blocks:[
+    {s:10,e:12.5,t:'museum',title:'V&A',sub:'Cast courts + jewellery',who:'Both'},
+    {s:13,e:14,t:'meal',title:'Lunch, Brompton Rd',sub:'',who:'Both'},
+    {s:15,e:17,t:'tourist',title:'Tower of London',sub:'Timed 15:00',who:'Both'},
+    {s:19.5,e:21.5,t:'meal',title:'Farewell dinner',sub:'Booked 19:30',who:'Both'}
+  ]},
+  {dow:'Sun',dom:'12',date:'Sun 12 Oct',kicker:'Vacation clock stops 15:20',tag:'Fly home',blocks:[
+    {s:9,e:10,t:'meal',title:'Breakfast, pack',sub:'',who:'Both'},
+    {s:10,e:11,t:'rest',title:'Check out, bags with concierge',sub:'',who:'Both'},
+    {s:11.5,e:12.75,t:'transit',title:'Tube + Heathrow Express',sub:'Auto-blocked · 3h before wheels-up',who:'Both'},
+    {s:12.75,e:15.33,t:'travel',title:'BA 219 LHR → DEN',sub:'Wheels up 15:20 — trip ends',who:'Both'}
+  ]}
+];
+const TICKETS = [
+  {t:'theatre',kind:'Theatre',title:'The Winter Ledger',venue:'Aldwych Theatre, WC2B 4DF',when:'Sat 4 Oct · doors 19:00, curtain 19:30',who:'Both',
+   facts:[{k:'Doors / curtain',v:'19:00 / 19:30'},{k:'Seats',v:'Stalls H12–H13'},{k:'Ref',v:'ALD-4471'}]},
+  {t:'theatre',kind:'Theatre',title:'Measure for Measure',venue:'Barbican Centre, EC2Y 8DS',when:'Mon 6 Oct · curtain 19:45',who:'Both',
+   facts:[{k:'Doors / curtain',v:'19:15 / 19:45'},{k:'Seats',v:'Circle D4–D5'},{k:'Ref',v:'BBC-2290'}]},
+  {t:'theatre',kind:'Matinee',title:'A Number',venue:'Duke of York\u0027s, St Martin\u0027s Ln',when:'Thu 9 Oct · curtain 14:30',who:'Both',
+   facts:[{k:'Doors / curtain',v:'14:00 / 14:30'},{k:'Seats',v:'Row F 7–8'},{k:'Ref',v:'DOY-1183'}]},
+  {t:'tourist',kind:'Attraction',title:'London Eye',venue:'Riverside Building, SE1 7PB',when:'Sun 5 Oct · slot 16:15',who:'Both',
+   facts:[{k:'Slot',v:'16:15, arrive 16:00'},{k:'Type',v:'Standard, 2 adults'},{k:'Ref',v:'EYE-88213'}]},
+  {t:'museum',kind:'Timed entry',title:'British Museum',venue:'Great Russell St, WC1B 3DG',when:'Sun 5 Oct · entry 10:00',who:'Both',
+   facts:[{k:'Entry',v:'10:00'},{k:'Cost',v:'Free, booked'},{k:'Ref',v:'BM-70412'}]}
+];
+const FLIGHTS = [
+  {leg:'Outbound · leaves home',code:'UA 928',fromCode:'DEN',toCode:'LHR',dep:'3 Oct 16:30 MDT',arr:'4 Oct 11:45 BST',note:'Bags dropped by 14:30 MDT. Denver time only appears on this leg.'},
+  {leg:'Trip starts · wheels down',code:'LHR T2',fromCode:'11:45',toCode:'BST',dep:'Border + bags ≈ 75 min',arr:'Express 13:00',note:'Everything after this is scheduled in London time.'},
+  {leg:'Trip ends · wheels up',code:'BA 219',fromCode:'LHR',toCode:'DEN',dep:'12 Oct 15:20 BST',arr:'12 Oct 18:05 MDT',note:'Airport travel auto-blocked from 11:30, three hours before departure.'},
+  {leg:'Home',code:'Ground',fromCode:'DEN',toCode:'Home',dep:'18:05 MDT',arr:'19:30 MDT',note:'A-Line to Union Station.'}
+];
+const H0 = 8, H1 = 23, PXM = 62, PXD = 44;
+const fmt = (h) => {const t=((h%24)+24)%24;const hh=Math.floor(t);const mm=Math.round((t-hh)*60);return String(hh).padStart(2,'0')+':'+String(mm%60).padStart(2,'0');};
+const dur = (h) => {const hh=Math.floor(h);const mm=Math.round((h-hh)*60);return (hh?hh+'h':'')+(mm?(hh?' ':'')+mm+'m':(hh?'':'0m'));};
+
+class Component extends DCLogic {
+  state = {screen:'signin', pin:'', who:0, day:1, tz:'london', sheet:null, week:1,
+    form:{type:'museum', title:'', start:14, len:2, pad:true, who:'Both'}};
+
+  clock(){ return this.state.tz==='london' ? '14:32' : '07:32'; }
+
+  tap(d){
+    const pin=(this.state.pin+d).slice(0,4);
+    this.setState({pin});
+    if(pin.length===4) setTimeout(()=>this.setState({screen:'day',pin:''}),260);
+  }
+
+  blocksFor(di, px){
+    const d=DAYS[di]; if(!d) return [];
+    const src=d.blocks.filter(b=>b.e>H0).slice().sort((a,b)=>a.s-b.s||a.e-b.e);
+    // lane assignment: overlapping blocks sit side by side
+    const lanes=[]; const laneOf=new Map();
+    src.forEach(b=>{ let li=lanes.findIndex(end=>end<=b.s+0.001); if(li<0){li=lanes.length;} lanes[li]=b.e; laneOf.set(b,li); });
+    const groupLanes=(b)=>{ let n=1; src.forEach(o=>{ if(o!==b && o.s<b.e-0.001 && b.s<o.e-0.001) n=Math.max(n,laneOf.get(o)+1); }); return Math.max(n,laneOf.get(b)+1); };
+    return src.map((b,i)=>{
+      const m=INK[b.t]; const s=Math.max(b.s,H0), e=Math.min(b.e,H1);
+      const lane=laneOf.get(b), cols=groupLanes(b);
+      const desk=px===PXD;
+      const h=Math.max(desk?40:26,Math.round((e-s)*px)-4);
+      const showStart=desk&&cols<2&&h>=58;
+      const lines=Math.max(1,Math.floor((h-10-(showStart?11:0))/13));
+      return {top:Math.round((s-H0)*px), h, tall:h>=46, wide:cols<2, narrow:cols>1,
+        lines, showStart,
+        pad: h>=46?'8px 10px':'4px 9px',
+        showRange: h>=44, showSub: h>=62,
+        left:(lane*100/cols).toFixed(3)+'%', width:'calc('+(100/cols).toFixed(3)+'% - 3px)',
+        bg:'rgba(242,236,225,.05)', border:'rgba(242,236,225,.1)', ink:m.ink,
+        title:b.title, sub:b.sub||m.label, range:fmt(b.s)+'–'+fmt(b.e),
+        startOnly: fmt(b.s)+'–'+fmt(b.e),
+        tap:()=>this.setState({sheet:{ink:m.ink,kind:m.label,title:b.title,sub:b.sub||'No notes yet.',who:b.who,
+          facts:[{k:'London time',v:fmt(b.s)+' – '+fmt(b.e)},{k:'Denver time',v:fmt(b.s-7)+' – '+fmt(b.e-7)},
+                 {k:'Length',v:dur(b.e-b.s)},{k:'Day',v:DAYS[di].date}]}})};
+    });
+  }
+
+  gaps(di){
+    const d=DAYS[di]; if(!d) return [];
+    const bs=[...d.blocks].sort((a,b)=>a.s-b.s); const out=[]; let cur=9;
+    bs.forEach(b=>{ if(b.s-cur>=1) out.push([cur,b.s]); cur=Math.max(cur,b.e); });
+    if(21-cur>=1) out.push([cur,21]);
+    return out.map(([s,e])=>{
+      const len=e-s;
+      const hint = len>=2.5 ? 'Long enough for a museum with a proper sit-down — V&A or the Wallace Collection.'
+        : len>=1.75 ? 'Library or bookshop window. British Library is 12 min on the Piccadilly line.'
+        : len>=1.25 ? 'Good walking block. Nothing ticketed, no rushing.'
+        : 'Coffee, a browse, or padding before the next thing.';
+      return {range:fmt(s)+' – '+fmt(e), len:dur(len), hours:len, hint,
+        fill:()=>this.setState({screen:'add', form:{...this.state.form, start:s, len:Math.min(len,3)}})};
+    });
+  }
+
+  renderVals(){
+    const st=this.state, f=st.form, day=DAYS[st.day], px=PXM;
+    const gold='#c9973f';
+    const hours=[]; for(let h=H0;h<=H1;h++) hours.push({top:Math.round((h-H0)*px), labelTop:Math.round((h-H0)*px)-5, label:st.tz==='london'?fmt(h):fmt(h-7)});
+    const deskHours=[]; for(let h=H0;h<=H1;h++) deskHours.push({top:Math.round((h-H0)*PXD), labelTop:Math.round((h-H0)*PXD)-5, label:st.tz==='london'?fmt(h):fmt(h-7)});
+
+    const people=[{name:'Dana',initial:'D',role:'Trip owner'},{name:'Chris',initial:'C',role:'Traveller'}].map((p,i)=>({
+      ...p, chip: st.who===i?gold:'rgba(242,236,225,.75)',
+      bg: st.who===i?'rgba(201,151,63,.12)':'rgba(242,236,225,.04)',
+      border: st.who===i?'rgba(201,151,63,.6)':'rgba(242,236,225,.1)',
+      fg:'#f2ece1', pick:()=>this.setState({who:i})}));
+
+    const keys=[1,2,3,4,5,6,7,8,9,'',0,'←'].map(k=>({label:String(k), fg:k===''?'transparent':'#f2ece1',
+      tap: k===''?()=>{} : k==='←' ? ()=>this.setState({pin:st.pin.slice(0,-1)}) : ()=>this.tap(k)}));
+
+    const dayBlocks=this.blocksFor(st.day, px);
+    const gaps=this.gaps(st.day);
+    const planned=day?day.blocks.reduce((a,b)=>a+(b.e-b.s),0):0;
+    const walkable=day?day.blocks.filter(b=>b.t==='walk').reduce((a,b)=>a+(b.e-b.s),0):0;
+
+    const weekStart=st.day<=2?1:Math.min(st.day-1,DAYS.length-5);
+    const week=DAYS.slice(weekStart,weekStart+5).map((d,i)=>{
+      const di=weekStart+i, on=di===st.day;
+      return {dow:d.dow, dom:d.dom, tag:d.tag, fg:on?gold:'rgba(242,236,225,.8)',
+        sub:on?gold:'rgba(242,236,225,.4)', pick:()=>this.setState({day:di, screen:'day'}),
+        blocks:this.blocksFor(di, PXD)};
+    });
+
+    const openTicket=(t)=>()=>this.setState({sheet:{ink:INK[t.t].ink,kind:t.kind,title:t.title,sub:t.venue,who:t.who,facts:[...t.facts,{k:'When',v:t.when}]}});
+
+    return {
+      legend:Object.keys(INK).map(k=>INK[k]),
+      statusClock:this.clock(),
+      isSignin:st.screen==='signin', isDay:st.screen==='day', isTickets:st.screen==='tickets',
+      isFlights:st.screen==='flights', isAdd:st.screen==='add', showTabs:st.screen!=='signin',
+      people, keys,
+      pinLabel: st.pin.length?'Code · '+st.pin.length+' of 4':'Shared code',
+      pinDots:[0,1,2,3].map(i=>({bg: i<st.pin.length?gold:'transparent'})),
+      tzChip: st.tz==='london'?'GMT+1 London':'MDT Denver',
+      toggleTz:()=>this.setState({tz:st.tz==='london'?'denver':'london'}),
+      dayKicker: day?day.kicker:'', dayTitle: day?day.date:'', weekTitle:'3 – 12 October 2026',
+      dayChips:DAYS.map((d,i)=>({dow:d.dow, dom:d.dom,
+        bg:i===st.day?'rgba(201,151,63,.18)':'rgba(242,236,225,.04)',
+        border:i===st.day?'rgba(201,151,63,.65)':'rgba(242,236,225,.09)',
+        fg:i===st.day?gold:'rgba(242,236,225,.8)', sub:i===st.day?gold:'rgba(242,236,225,.4)',
+        pick:()=>this.setState({day:i, screen:'day'})})),
+      dayStats:[
+        {label:'Planned', value:dur(planned), ink:'#f2ece1'},
+        {label:'Free windows', value: gaps.length ? gaps.length+' · '+dur(gaps.reduce((a,g)=>a+g.hours,0)) : 'none', ink:gold},
+        {label:'On foot', value:walkable?dur(walkable):'—', ink:'#7f9c6e'}
+      ],
+      railH:(H1-H0)*px+20, deskRailH:(H1-H0)*PXD+20, hours, deskHours,
+      blocks:dayBlocks, week, suggestions:gaps,
+      tickets:TICKETS.map(t=>({...t, ink:INK[t.t].ink, border:'rgba(242,236,225,.1)', tap:openTicket(t)})),
+      flights:FLIGHTS, vacationLength:'8 days 3 hrs',
+      tabs:[{k:'day',label:'Day'},{k:'tickets',label:'Tickets'},{k:'flights',label:'Flights'},{k:'add',label:'+ Add'}].map(t=>({
+        label:t.label, bg: st.screen===t.k?'rgba(201,151,63,.18)':'transparent',
+        fg: st.screen===t.k?gold:'rgba(242,236,225,.55)', pick:()=>this.setState({screen:t.k, sheet:null})})),
+      deskNav:[{k:'day',label:'Week'},{k:'tickets',label:'Tickets'},{k:'flights',label:'Flights'},{k:'add',label:'New block'}].map(n=>({
+        label:n.label, bg: st.screen===n.k?'rgba(201,151,63,.16)':'transparent',
+        fg: st.screen===n.k?gold:'rgba(242,236,225,.65)', pick:()=>this.setState({screen:n.k, sheet:null})})),
+      sheet:st.sheet, closeSheet:()=>this.setState({sheet:null}),
+      goAdd:()=>this.setState({screen:'add'}), goDay:()=>this.setState({screen:'day'}),
+      saveBlock:()=>this.setState({screen:'day'}),
+      formDayLabel: day?day.date:'', formTitle:f.title,
+      setTitle:(e)=>this.setState({form:{...f,title:e.target.value}}),
+      typeChips:Object.keys(INK).map(k=>({label:INK[k].label, ink:INK[k].ink,
+        bg: f.type===k?'rgba(201,151,63,.14)':'rgba(242,236,225,.04)',
+        border: f.type===k?'rgba(201,151,63,.6)':'rgba(242,236,225,.1)',
+        fg: f.type===k?'#f2ece1':'rgba(242,236,225,.7)',
+        pick:()=>this.setState({form:{...f,type:k}})})),
+      formStart:fmt(f.start), formStartDen:fmt(f.start-7), formEnd:fmt(f.start+f.len), formDur:dur(f.len),
+      startUp:()=>this.setState({form:{...f,start:Math.min(23,f.start+0.25)}}),
+      startDown:()=>this.setState({form:{...f,start:Math.max(0,f.start-0.25)}}),
+      durUp:()=>this.setState({form:{...f,len:Math.min(8,f.len+0.25)}}),
+      durDown:()=>this.setState({form:{...f,len:Math.max(0.25,f.len-0.25)}}),
+      togglePad:()=>this.setState({form:{...f,pad:!f.pad}}),
+      padBg: f.pad?'rgba(201,151,63,.1)':'rgba(242,236,225,.04)',
+      padBorder: f.pad?'rgba(201,151,63,.5)':'rgba(242,236,225,.1)',
+      padTrackBg: f.pad?gold:'rgba(242,236,225,.16)', padKnobLeft: f.pad?21:3,
+      padNote: f.pad? 'Adds 45 min before at '+fmt(f.start-0.75)+', marked as travel.' : 'No travel time reserved around this block.',
+      whoChips:['Dana','Chris','Both'].map(w=>({label:w,
+        bg: f.who===w?'rgba(201,151,63,.16)':'rgba(242,236,225,.04)',
+        border: f.who===w?'rgba(201,151,63,.6)':'rgba(242,236,225,.1)',
+        fg: f.who===w?gold:'rgba(242,236,225,.7)', pick:()=>this.setState({form:{...f,who:w}})})),
+      conflictNote: 'Saving drops this into '+(day?day.date:'')+' at '+fmt(f.start)+' London time ('+fmt(f.start-7)+' Denver). Overlaps are flagged, never silently stacked.'
+    };
+  }
+}
+</script>
+</body>
+</html>
