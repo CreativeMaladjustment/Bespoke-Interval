@@ -117,10 +117,8 @@ alter table public.flights enable row level security;
 -- America/Denver local time; everything from wheels-down at Heathrow onward
 -- is true Europe/London local time.
 --
--- The shared sign-in code seeded here is 4610 — change it after your first
--- deploy with:
---   update public.trips set pin_hash = crypt('<new code>', gen_salt('bf'))
---   where slug = 'thanksgiving-london-2026';
+-- Authentication now uses the PASSWORD environment variable.
+-- `pin_hash` is still seeded here only because the existing schema requires it.
 
 insert into public.trips (slug, name, home_timezone, destination_timezone, pin_hash, starts_at, starts_terminal, ends_at, ends_terminal)
 values (
@@ -129,7 +127,7 @@ values (
   'America/Denver',
   'Europe/London',
   crypt('4610', gen_salt('bf')),
-  '2026-11-21 09:15:00+00',
+  '2026-11-22 09:15:00+00',
   'LHR T2',
   '2026-11-30 16:10:00+00',
   'LHR T5'
@@ -143,7 +141,7 @@ from public.trips t,
     ('jd', 'j', 'Trip owner', 0),
     ('emy', 'e', 'Traveller', 1)
   ) as v(name, initial, role, sort_order)
-where t.slug = 'thanksgiving-2026'
+where t.slug = 'thanksgiving-london-2026'
   and not exists (
     select 1 from public.travelers ex
     where ex.trip_id = t.id and ex.name = v.name
