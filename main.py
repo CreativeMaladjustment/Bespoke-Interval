@@ -8,14 +8,14 @@ whole app is server-rendered HTML.
 """
 
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 import logic
 import templates
-from auth import COOKIE_NAME, read_session, sign_session, verify_pin
+from auth import COOKIE_NAME, Session, read_session, sign_session, verify_pin
 from db import get_supabase_client, get_trip_slug
 
 app = FastAPI()
@@ -108,11 +108,29 @@ def _get_bundle() -> Bundle:
     return Bundle(client, get_trip_slug())
 
 
-def _require_session(request: Request):
+def _authenticate(request: Request) -> tuple[Session, Bundle] | None:
+    """Reads the session cookie and validates it against the *current* trip.
+
+    A signed cookie only proves it was issued by this app at some point — it
+    doesn't prove the trip/traveler it names still exist or still match
+    (e.g. TRIP_SLUG was repointed at a different trip, or the traveler list
+    changed). Treat a mismatch the same as no session at all.
+    """
     session = read_session(request)
     if not session:
         return None
-    return session
+    bundle = _get_bundle()
+    if session.trip_id != bundle.trip["id"]:
+        return None
+    if not any(t["id"] == session.traveler_id for t in bundle.travelers):
+        return None
+    return session, bundle
+
+
+def _login_redirect() -> RedirectResponse:
+    resp = RedirectResponse("/login", status_code=303)
+    resp.delete_cookie(COOKIE_NAME)
+    return resp
 
 
 def _block_sheet(b: dict, day_label: str) -> str:
@@ -151,15 +169,14 @@ def _week_indices(day_index: int, total: int) -> list[int]:
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
-    session = _require_session(request)
-    if not session:
-        return RedirectResponse("/login", status_code=303)
+    if not _authenticate(request):
+        return _login_redirect()
     return RedirectResponse("/day/2", status_code=303)
 
 
 @app.get("/login", response_class=HTMLResponse)
 def login_form(request: Request):
-    if _require_session(request):
+    if _authenticate(request):
         return RedirectResponse("/day/2", status_code=303)
     bundle = _get_bundle()
     return HTMLResponse(templates.login_page(bundle.travelers, bundle.trip["name"]))
@@ -194,10 +211,10 @@ def _tz_from_request(request: Request) -> str:
 
 @app.get("/day/{day_index}", response_class=HTMLResponse)
 def day_view(request: Request, day_index: int):
-    session = _require_session(request)
-    if not session:
-        return RedirectResponse("/login", status_code=303)
-    bundle = _get_bundle()
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
     day = bundle.days_by_index.get(day_index)
     if not day:
         return RedirectResponse("/day/2", status_code=303)
@@ -270,10 +287,10 @@ def day_view(request: Request, day_index: int):
 
 @app.get("/tickets", response_class=HTMLResponse)
 def tickets_view(request: Request):
-    session = _require_session(request)
-    if not session:
-        return RedirectResponse("/login", status_code=303)
-    bundle = _get_bundle()
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
     sheets = "".join(templates.sheet_for_ticket(t) for t in bundle.tickets)
     ctx = {
         "trip": bundle.trip,
@@ -288,10 +305,10 @@ def tickets_view(request: Request):
 
 @app.get("/flights", response_class=HTMLResponse)
 def flights_view(request: Request):
-    session = _require_session(request)
-    if not session:
-        return RedirectResponse("/login", status_code=303)
-    bundle = _get_bundle()
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
     dest_tz = _zone(bundle.trip["destination_timezone"])
     starts_local = bundle.trip["starts_at"].astimezone(dest_tz)
     ends_local = bundle.trip["ends_at"].astimezone(dest_tz)
@@ -323,14 +340,30 @@ def _empty_form(day_index: int, prefill_type: str = "museum", start_hour: float 
 
 @app.get("/add", response_class=HTMLResponse)
 def add_form(request: Request):
-    session = _require_session(request)
-    if not session:
-        return RedirectResponse("/login", status_code=303)
-    bundle = _get_bundle()
-    day_index = int(request.query_params.get("day", 2))
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
+
+    try:
+        day_index = int(request.query_params.get("day", 2))
+    except ValueError:
+        day_index = 2
+    if day_index not in bundle.days_by_index:
+        day_index = next(iter(bundle.days_by_index), 2)
+
     prefill_type = request.query_params.get("type", "museum")
+    if prefill_type not in logic.INK:
+        prefill_type = "museum"
+
+    start_hour = None
     start_param = request.query_params.get("start")
-    start_hour = float(start_param) if start_param else None
+    if start_param is not None:
+        try:
+            start_hour = float(start_param)
+        except ValueError:
+            start_hour = None
+
     ctx = {
         "trip": bundle.trip,
         "travelers": bundle.travelers,
@@ -361,12 +394,12 @@ def add_submit(
     who: str = Form("Both"),
     travel_pad: str | None = Form(None),
 ):
-    session = _require_session(request)
-    if not session:
-        return RedirectResponse("/login", status_code=303)
-    bundle = _get_bundle()
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
     day = bundle.days_by_index.get(day_index)
-    if not day:
+    if not day or type not in logic.INK:
         return RedirectResponse("/add", status_code=303)
 
     hh, mm = (int(p) for p in start.split(":"))
@@ -407,10 +440,10 @@ def add_submit(
 
 @app.get("/blocks/{block_id}/edit", response_class=HTMLResponse)
 def edit_form(request: Request, block_id: str):
-    session = _require_session(request)
-    if not session:
-        return RedirectResponse("/login", status_code=303)
-    bundle = _get_bundle()
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
     block = bundle.block_by_id.get(block_id)
     if not block:
         return RedirectResponse("/day/2", status_code=303)
@@ -453,12 +486,12 @@ def edit_submit(
     length_minutes: int = Form(...),
     who: str = Form("Both"),
 ):
-    session = _require_session(request)
-    if not session:
-        return RedirectResponse("/login", status_code=303)
-    bundle = _get_bundle()
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
     day = bundle.days_by_index.get(day_index)
-    if not day:
+    if not day or type not in logic.INK:
         return RedirectResponse(f"/blocks/{block_id}/edit", status_code=303)
 
     hh, mm = (int(p) for p in start.split(":"))
@@ -475,7 +508,7 @@ def edit_submit(
             "starts_at": starts_at.isoformat(),
             "ends_at": ends_at.isoformat(),
             "who": who,
-            "updated_at": "now()",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }
     ).eq("id", block_id).execute()
     return RedirectResponse(f"/day/{day_index}", status_code=303)
@@ -483,10 +516,10 @@ def edit_submit(
 
 @app.post("/blocks/{block_id}/delete")
 def delete_block(request: Request, block_id: str):
-    session = _require_session(request)
-    if not session:
-        return RedirectResponse("/login", status_code=303)
-    bundle = _get_bundle()
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
     block = bundle.block_by_id.get(block_id)
     day_index = bundle.days_by_id[block["trip_day_id"]]["day_index"] if block else 2
     client = get_supabase_client()

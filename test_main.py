@@ -185,6 +185,39 @@ def test_day_view_renders_blocks_when_authenticated(mock_client):
     assert "Sun 4 Oct" in resp.text
 
 
+@patch("main.get_supabase_client", return_value=FakeClient())
+def test_stale_session_for_wrong_trip_is_rejected(mock_client):
+    # A cookie signed for a trip/traveler that no longer matches the
+    # currently configured trip (e.g. TRIP_SLUG was repointed) must not
+    # grant access, and the stale cookie should be cleared.
+    token = sign_session("00000000-0000-0000-0000-000000000000", DANA_ID, "Dana")
+    client.cookies.set("bespoke_session", token)
+    resp = client.get("/day/2")
+    client.cookies.clear()
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/login"
+    assert resp.cookies.get("bespoke_session") in (None, '""')
+
+
+@patch("main.get_supabase_client", return_value=FakeClient())
+def test_stale_session_for_unknown_traveler_is_rejected(mock_client):
+    token = sign_session(TRIP_ID, "00000000-0000-0000-0000-000000000000", "Ghost")
+    client.cookies.set("bespoke_session", token)
+    resp = client.get("/day/2")
+    client.cookies.clear()
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/login"
+
+
+@patch("main.get_supabase_client", return_value=FakeClient())
+def test_add_form_survives_bad_query_params(mock_client):
+    token = sign_session(TRIP_ID, DANA_ID, "Dana")
+    client.cookies.set("bespoke_session", token)
+    resp = client.get("/add?day=not-a-number&type=nonsense-type&start=also-not-a-number")
+    client.cookies.clear()
+    assert resp.status_code == 200
+
+
 def test_week_indices_cap_at_trip_bounds():
     assert main._week_indices(1, 10) == [2, 3, 4, 5, 6]
     assert main._week_indices(10, 10) == [6, 7, 8, 9, 10]

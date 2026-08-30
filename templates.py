@@ -220,27 +220,6 @@ def _sheet(anchor: str, ink: str, kind: str, title: str, sub: str, who: str, fac
 """
 
 
-def sheet_for_block(block: dict, day_label: str) -> str:
-    from logic import INK, dur, fmt
-
-    facts = [
-        {"k": "London time", "v": f"{fmt(block['s'])} – {fmt(block['e'])}"},
-        {"k": "Denver time", "v": f"{fmt(block['s'] - 7)} – {fmt(block['e'] - 7)}"},
-        {"k": "Length", "v": dur(block["e"] - block["s"])},
-        {"k": "Day", "v": day_label},
-    ]
-    return _sheet(
-        f"sheet-{block['id']}",
-        INK[block["type"]]["ink"],
-        INK[block["type"]]["label"],
-        block["title"],
-        block.get("subtitle") or "No notes yet.",
-        block["who"],
-        facts,
-        edit_href=f"/blocks/{block['id']}/edit",
-    )
-
-
 def sheet_for_ticket(ticket: dict) -> str:
     from logic import INK
 
