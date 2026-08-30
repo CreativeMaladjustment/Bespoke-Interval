@@ -187,7 +187,7 @@ FONT_LINK = (
 )
 
 
-def _sheet(anchor: str, ink: str, kind: str, title: str, sub: str, who: str, facts: list[dict], edit_href: str | None = None) -> str:
+def _sheet(anchor: str, ink: str, kind: str, title: str, sub: str, who: str, facts: list[dict], edit_href: str | None = None, edit_label: str = "Edit") -> str:
     facts_html = "".join(
         f'<div class="sheet-fact"><div class="label">{esc(f["k"])}</div>'
         f'<div style="font:500 13px/1.35 \'IBM Plex Sans\',sans-serif;color:var(--ink);margin-top:6px">{esc(f["v"])}</div></div>'
@@ -195,7 +195,7 @@ def _sheet(anchor: str, ink: str, kind: str, title: str, sub: str, who: str, fac
     )
     edit_link = (
         f'<a href="{esc(edit_href)}" class="btn-gold" style="border:1px solid var(--border-gold);'
-        f'background:rgba(201,151,63,.16);color:var(--gold-hi)">Edit block</a>'
+        f'background:rgba(201,151,63,.16);color:var(--gold-hi)">{esc(edit_label)}</a>'
         if edit_href
         else ""
     )
@@ -232,6 +232,8 @@ def sheet_for_ticket(ticket: dict) -> str:
         ticket["venue"] or "",
         ticket["who"],
         facts,
+        edit_href=f"/tickets/{ticket['id']}/edit",
+        edit_label="Edit ticket",
     )
 
 
@@ -526,6 +528,8 @@ def tickets_page(ctx: dict) -> str:
   <div class="kicker">Bought &amp; booked</div>
   <div class="h1">Tickets</div>
   <div style="margin-top:20px">{cards}</div>
+  <a href="/tickets/add" style="display:block;margin-top:6px;text-align:center;padding:14px;border-radius:13px;
+     border:1px dashed var(--gold-dim);font:500 12.5px/1 'IBM Plex Sans',sans-serif">+ Add a ticket</a>
 </div>
 """
     return shell(
@@ -665,6 +669,73 @@ def flight_form_page(ctx: dict) -> str:
     return shell(
         title=f"{'Edit' if ctx.get('flight_id') else 'New'} leg — {ctx['trip']['name']}",
         active="flights",
+        session=ctx["session"],
+        trip=ctx["trip"],
+        travelers=ctx["travelers"],
+        vacation=ctx["vacation"],
+        body=body,
+    )
+
+
+def ticket_form_page(ctx: dict) -> str:
+    from logic import INK
+
+    form = ctx["form"]
+    category_options = "".join(
+        f'<option value="{key}" {"selected" if key == form["category"] else ""}>{esc(v["label"])}</option>'
+        for key, v in INK.items()
+    )
+    who_chips = "".join(
+        f"""<label class="who-chip"><input type="radio" name="who" value="{esc(w)}" {"checked" if w == form["who"] else ""}>{esc(w)}</label>"""
+        for w in [t["name"] for t in ctx["travelers"]] + ["Both"]
+    )
+    error_html = f'<div class="error-note">{esc(ctx["error"])}</div>' if ctx.get("error") else ""
+    body = f"""
+<div style="padding:56px 20px 60px;max-width:520px">
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <a href="/tickets" class="mono" style="font-size:12px;color:var(--ink-55)">Cancel</a>
+    <span class="label">{"Edit ticket" if ctx.get("ticket_id") else "New ticket"}</span>
+    <span></span>
+  </div>
+  <div class="h1">{"Edit ticket" if ctx.get("ticket_id") else "New ticket"}</div>
+  <form method="post" action="{ctx["form_action"]}">
+    <div class="field-label">Category</div>
+    <select name="category" class="field-input">{category_options}</select>
+
+    <div class="field-label">Kind</div>
+    <input class="field-input" name="kind" placeholder="e.g. Theatre, Timed entry, Market" value="{esc(form['kind'])}" required>
+
+    <div class="field-label">Title</div>
+    <input class="field-input" name="title" placeholder="e.g. Shakespeare at Barbican" value="{esc(form['title'])}" required>
+
+    <div class="field-label">Venue (optional)</div>
+    <input class="field-input" name="venue" placeholder="e.g. Barbican Centre, EC2Y 8DS" value="{esc(form['venue'])}">
+
+    <div class="field-label">Occurs at (destination time, optional)</div>
+    <input class="field-input" type="datetime-local" name="occurs_at" value="{esc(form.get('occurs_at') or '')}">
+
+    <div style="margin-top:14px;padding:15px;border-radius:13px;background:var(--panel-3);border:1px solid var(--ink-10)">
+      <div class="field-label" style="margin-top:0">Who's going</div>
+      <div class="who-row">{who_chips}</div>
+    </div>
+
+    <div class="field-label">Facts (one "Key: Value" per line)</div>
+    <textarea class="field-input" name="facts_text" rows="4" placeholder="Seats: Circle D4&ndash;D5&#10;Ref: BBC-2342">{esc(form.get('facts_text') or '')}</textarea>
+
+    <div class="field-label">Sort order</div>
+    <input class="field-input" type="number" name="sort_order" step="1" value="{form['sort_order']}">
+
+    {error_html}
+    <button type="submit" class="btn btn-gold" style="width:100%;margin-top:22px;padding:14px">Save ticket</button>
+  </form>
+  {f'''<form method="post" action="/tickets/{ctx["ticket_id"]}/delete" style="margin-top:10px" onsubmit="return confirm('Delete this ticket?')">
+    <button type="submit" class="btn btn-ghost" style="width:100%;padding:14px;color:#d98a8a;border-color:rgba(217,138,138,.35)">Delete ticket</button>
+  </form>''' if ctx.get("ticket_id") else ""}
+</div>
+"""
+    return shell(
+        title=f"{'Edit' if ctx.get('ticket_id') else 'New'} ticket — {ctx['trip']['name']}",
+        active="tickets",
         session=ctx["session"],
         trip=ctx["trip"],
         travelers=ctx["travelers"],
