@@ -123,7 +123,11 @@ jobs:
           cache: pip
 
       - name: Install semgrep
-        run: pip install "semgrep==1.99.0"
+        # setuptools>=81 dropped the bundled pkg_resources shim, which one of
+        # semgrep's own transitive deps (opentelemetry-instrumentation) still
+        # imports at startup — without this pin, semgrep crashes before it
+        # even parses args (ModuleNotFoundError: No module named 'pkg_resources').
+        run: pip install "semgrep==1.99.0" "setuptools<81"
 
       - name: Run semgrep
         # Diff-aware on PRs (only reports findings introduced by the diff,
@@ -277,15 +281,20 @@ jobs:
         # Diff scan on PRs (only commits introduced by this PR); full
         # filesystem scan on push/schedule/workflow_dispatch, so the weekly
         # cron always sweeps the whole repo history.
+        #
+        # --no-update: trufflehog otherwise checks for and installs a newer
+        # release on every invocation, which (a) defeats the pinned/verified
+        # install above and (b) fails outright here since the binary lives in
+        # a root-owned path it can't self-overwrite as the runner user.
         run: |
           set +e
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            trufflehog git file://. \
+            trufflehog --no-update git file://. \
               --since-commit="${{ github.event.pull_request.base.sha }}" \
               --branch=HEAD \
               --results=verified,unknown --json > trufflehog-results.jsonl
           else
-            trufflehog filesystem . \
+            trufflehog --no-update filesystem . \
               --results=verified,unknown --json > trufflehog-results.jsonl
           fi
 
