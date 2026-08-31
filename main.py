@@ -313,6 +313,98 @@ def day_view(request: Request, day_index: int):
     return HTMLResponse(templates.day_page(ctx))
 
 
+@app.get("/days/{day_id}/edit", response_class=HTMLResponse)
+def day_edit_form(request: Request, day_id: str):
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
+    day = bundle.days_by_id.get(day_id)
+    if not day:
+        return RedirectResponse("/day/2", status_code=303)
+    ctx = {
+        "trip": bundle.trip,
+        "travelers": bundle.travelers,
+        "session": session,
+        "vacation": logic.vacation_length(*_clock_bounds(bundle)),
+        "day_id": day_id,
+        "day_index": day["day_index"],
+        "form": {
+            "date_label": day["date_label"],
+            "tag": day.get("tag") or "",
+            "kicker": day.get("kicker") or "",
+        },
+        "form_action": f"/days/{day_id}/edit",
+    }
+    return HTMLResponse(templates.day_form_page(ctx))
+
+
+@app.post("/days/{day_id}/edit", response_class=HTMLResponse)
+def day_edit_submit(
+    request: Request,
+    day_id: str,
+    tag: str = Form(""),
+    kicker: str = Form(""),
+):
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
+    day = bundle.days_by_id.get(day_id)
+    if not day:
+        return RedirectResponse("/day/2", status_code=303)
+    client = get_supabase_client()
+    client.table("trip_days").update(
+        {
+            "tag": tag.strip() or None,
+            "kicker": kicker.strip() or None,
+        }
+    ).eq("id", day_id).execute()
+    return RedirectResponse(f"/day/{day['day_index']}", status_code=303)
+
+
+@app.get("/agenda", response_class=HTMLResponse)
+def agenda_view(request: Request):
+    auth = _authenticate(request)
+    if not auth:
+        return _login_redirect()
+    session, bundle = auth
+    tz_key = _tz_from_request(request)
+    tz = logic.TIMEZONES[tz_key]["zone"]
+    toggle_tz = "denver" if tz_key == "london" else "london"
+
+    day_groups = []
+    for day in bundle.days:
+        day_blocks = bundle.blocks_by_day[day["day_index"]]
+        if not day_blocks:
+            continue
+        items = [
+            {
+                "id": b["id"],
+                "day_index": day["day_index"],
+                "range": f"{b['starts_at'].astimezone(tz).strftime('%H:%M')}–{b['ends_at'].astimezone(tz).strftime('%H:%M')}",
+                "title": b["title"],
+                "subtitle": b.get("subtitle") or "",
+                "who": b["who"],
+                "ink": logic.INK[b["type"]]["ink"],
+                "type_label": logic.INK[b["type"]]["label"],
+            }
+            for b in day_blocks
+        ]
+        day_groups.append({"date_label": day["date_label"], "day_index": day["day_index"], "items": items})
+
+    ctx = {
+        "trip": bundle.trip,
+        "travelers": bundle.travelers,
+        "session": session,
+        "vacation": logic.vacation_length(*_clock_bounds(bundle)),
+        "day_groups": day_groups,
+        "tz_chip": logic.TIMEZONES[tz_key]["chip"],
+        "toggle_href": f"/agenda?tz={toggle_tz}",
+    }
+    return HTMLResponse(templates.agenda_page(ctx))
+
+
 @app.get("/tickets", response_class=HTMLResponse)
 def tickets_view(request: Request):
     auth = _authenticate(request)

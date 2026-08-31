@@ -109,6 +109,15 @@ input,select,button{font-family:inherit}
 .tick-fact .v{font:500 12px/1.3 'IBM Plex Sans',sans-serif;color:rgba(242,236,225,.85);margin-top:5px}
 .list-gap{display:flex;flex-direction:column;gap:11px;margin-top:20px}
 
+.agenda-day-label{position:sticky;top:0;z-index:1;background:var(--bg);padding:16px 2px 8px;
+  font:600 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--gold)}
+.agenda-row{display:flex;align-items:center;gap:11px;padding:11px 2px;border-bottom:1px solid var(--border);color:var(--ink)}
+.agenda-time{width:88px;flex:none;font-size:11px;color:var(--ink-55)}
+.agenda-body{flex:1;min-width:0}
+.agenda-title{font:500 14px/1.3 'IBM Plex Sans',sans-serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.agenda-sub{font:400 11.5px/1.4 'IBM Plex Sans',sans-serif;color:var(--ink-55);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.agenda-who{flex:none;font-size:10px;color:var(--ink-40)}
+
 .gap-card{padding:12px;border-radius:11px;border:1px dashed rgba(242,236,225,.22);background:rgba(242,236,225,.03)}
 
 .clock-card{margin-top:18px;border-radius:16px;padding:18px;background:linear-gradient(150deg,#2a2530,#1b1a1f);
@@ -164,11 +173,13 @@ input,select,button{font-family:inherit}
 
 .week-grid{display:flex;min-height:0}
 .week-days{display:flex;padding:11px 0 9px 52px;border-bottom:1px solid var(--border)}
-.week-day{flex:1;padding-left:6px}
+.week-day{flex:1;padding-left:6px;display:flex;align-items:flex-start;gap:5px}
 .week-day .dow{font:400 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-40)}
 .week-day.active .dow{color:var(--gold)}
 .week-day .tag{font:500 12px/1 'IBM Plex Sans',sans-serif;color:var(--ink-70);margin-top:6px}
 .week-day.active .tag{color:var(--gold)}
+.week-day-edit{font-size:10px;color:var(--ink-25);line-height:1;padding:2px}
+.week-day-edit:hover{color:var(--gold)}
 .week-rail{position:relative;margin-top:6px;margin-left:52px}
 .week-cols{display:flex}
 .week-col{flex:1;position:relative;border-left:1px solid var(--border);padding:0 4px;min-height:1px}
@@ -257,11 +268,11 @@ def shell(*, title: str, active: str, session, trip: dict, travelers: list[dict]
         f'<span style="font:400 12px/1 \'IBM Plex Sans\',sans-serif;color:var(--ink-70)">{esc(t["name"])}</span></div>'
         for t in travelers
     )
-    nav_items = [("day", "/day/1", "Week / Day"), ("tickets", "/tickets", "Tickets"), ("flights", "/flights", "Flights"), ("add", "/add", "New block")]
+    nav_items = [("day", "/day/1", "Week / Day"), ("agenda", "/agenda", "Agenda"), ("tickets", "/tickets", "Tickets"), ("flights", "/flights", "Flights"), ("add", "/add", "New block")]
     side_nav = "".join(
         f'<a href="{href}" class="{"active" if key == active else ""}">{esc(label)}</a>' for key, href, label in nav_items
     )
-    tabs = [("day", "/day/1", "Day"), ("tickets", "/tickets", "Tickets"), ("flights", "/flights", "Flights"), ("add", "/add", "+ Add")]
+    tabs = [("day", "/day/1", "Day"), ("agenda", "/agenda", "Agenda"), ("tickets", "/tickets", "Tickets"), ("flights", "/flights", "Flights"), ("add", "/add", "+ Add")]
     tab_html = "".join(
         f'<a href="{href}" class="tab {"active" if key == active else ""}">{esc(label)}</a>' for key, href, label in tabs
     )
@@ -429,8 +440,10 @@ def day_page(ctx: dict) -> str:
         blocks_html = "".join(render_week_block(b) for b in wd["blocks"])
         week_cols.append(f'<div class="week-col">{blocks_html}</div>')
     week_day_headers = "".join(
-        f'<a href="/day/{wd["day_index"]}" class="week-day {"active" if wd["day_index"] == day["day_index"] else ""}">'
-        f'<div class="dow">{esc(wd["dow"])} {esc(wd["dom"])}</div><div class="tag">{esc(wd["tag"])}</div></a>'
+        f'<div class="week-day {"active" if wd["day_index"] == day["day_index"] else ""}">'
+        f'<a href="/day/{wd["day_index"]}" style="color:inherit"><div class="dow">{esc(wd["dow"])} {esc(wd["dom"])}</div>'
+        f'<div class="tag">{esc(wd["tag"])}</div></a>'
+        f'<a href="/days/{wd["id"]}/edit" class="week-day-edit" title="Edit this day">&#9998;</a></div>'
         for wd in ctx["week_days"]
     )
 
@@ -504,6 +517,48 @@ def day_page(ctx: dict) -> str:
         vacation=ctx["vacation"],
         body=body,
         sheets=ctx["sheets"],
+    )
+
+
+def agenda_page(ctx: dict) -> str:
+    groups_html = ""
+    for g in ctx["day_groups"]:
+        rows = "".join(
+            f"""<a href="/day/{it['day_index']}#sheet-{it['id']}" class="agenda-row">
+  <div class="agenda-time mono">{esc(it['range'])}</div>
+  <span class="swatch" style="background:{it['ink']}"></span>
+  <div class="agenda-body">
+    <div class="agenda-title">{esc(it['title'])}</div>
+    {f'<div class="agenda-sub">{esc(it["subtitle"])}</div>' if it['subtitle'] else ''}
+  </div>
+  <div class="agenda-who mono">{esc(it['who'])}</div>
+</a>"""
+            for it in g["items"]
+        )
+        groups_html += f"""
+<div class="agenda-day-label">{esc(g['date_label'])}</div>
+{rows}
+"""
+    body = f"""
+<div style="padding:56px 20px 40px;max-width:640px">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+    <div>
+      <div class="kicker">Whole trip</div>
+      <div class="h1">Agenda</div>
+    </div>
+    <a href="{ctx["toggle_href"]}" class="pill">{esc(ctx["tz_chip"])}</a>
+  </div>
+  <div style="margin-top:20px">{groups_html}</div>
+</div>
+"""
+    return shell(
+        title=f"Agenda — {ctx['trip']['name']}",
+        active="agenda",
+        session=ctx["session"],
+        trip=ctx["trip"],
+        travelers=ctx["travelers"],
+        vacation=ctx["vacation"],
+        body=body,
     )
 
 
@@ -741,6 +796,38 @@ def ticket_form_page(ctx: dict) -> str:
     return shell(
         title=f"{'Edit' if ctx.get('ticket_id') else 'New'} ticket — {ctx['trip']['name']}",
         active="tickets",
+        session=ctx["session"],
+        trip=ctx["trip"],
+        travelers=ctx["travelers"],
+        vacation=ctx["vacation"],
+        body=body,
+    )
+
+
+def day_form_page(ctx: dict) -> str:
+    form = ctx["form"]
+    body = f"""
+<div style="padding:56px 20px 60px;max-width:520px">
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <a href="/day/{ctx["day_index"]}" class="mono" style="font-size:12px;color:var(--ink-55)">Cancel</a>
+    <span class="label">Edit day</span>
+    <span></span>
+  </div>
+  <div class="h1">{esc(form['date_label'])}</div>
+  <form method="post" action="{ctx["form_action"]}">
+    <div class="field-label">Day name (shown on the week strip)</div>
+    <input class="field-input" name="tag" placeholder="e.g. Markets" value="{esc(form['tag'])}">
+
+    <div class="field-label">Kicker (shown above the date)</div>
+    <input class="field-input" name="kicker" placeholder="e.g. First full day" value="{esc(form['kicker'])}">
+
+    <button type="submit" class="btn btn-gold" style="width:100%;margin-top:22px;padding:14px">Save day</button>
+  </form>
+</div>
+"""
+    return shell(
+        title=f"Edit {form['date_label']} — {ctx['trip']['name']}",
+        active="day",
         session=ctx["session"],
         trip=ctx["trip"],
         travelers=ctx["travelers"],
