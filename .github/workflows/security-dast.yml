@@ -58,7 +58,7 @@ jobs:
 
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.x"
+          python-version: "3.13"
           cache: pip
           cache-dependency-path: requirements.txt
 
@@ -80,6 +80,11 @@ jobs:
           done
 
       - name: Start app under DAST fixture double
+        # PYTHONPATH=. so `from test_main import FakeClient` in run_target.py
+        # resolves — running a script by path only puts *its own* directory
+        # on sys.path, not the repo root where test_main.py actually lives.
+        env:
+          PYTHONPATH: .
         run: |
           nohup python .github/dast/run_target.py > app.log 2>&1 &
           echo $! > app.pid
@@ -99,6 +104,8 @@ jobs:
 
       - name: Log in and capture an authenticated session cookie
         id: login
+        env:
+          PYTHONPATH: . # same reason as the previous step: test_main.py lives at the repo root
         run: |
           COOKIE=$(python .github/dast/login_for_dast.py)
           echo "::add-mask::$COOKIE"
