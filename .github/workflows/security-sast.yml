@@ -1,15 +1,17 @@
 name: "Security: SAST, dependencies & secrets"
 
 # PRs get a fast, diff-aware scan wherever a tool supports it (Semgrep
-# --baseline-commit, TruffleHog since-commit). Pushes to main, manual runs,
-# and the weekly cron below always scan the *entire* codebase, so
-# newly-published CVEs or rule updates that apply to unchanged code still
-# surface on a regular cadence (see the `github.event_name == 'pull_request'`
-# checks inside the semgrep/secrets jobs).
+# --baseline-commit, TruffleHog since-commit). No push-to-main trigger on
+# purpose: merging a PR already re-triggers this via the pull_request event's
+# `synchronize`/re-checks, so a separate push trigger just meant a second run
+# back-to-back at merge time. That does leave a gap for direct pushes to main
+# (if branch protection allows them) and for main drifting between merges —
+# the weekly cron below (and manual runs) is what covers that with a
+# full-codebase scan, so newly-published CVEs or rule updates still surface
+# on a regular cadence (see the `github.event_name == 'pull_request'` checks
+# inside the semgrep/secrets jobs).
 on:
   pull_request:
-    branches: [main]
-  push:
     branches: [main]
   schedule:
     - cron: "17 4 * * 1" # Mondays 04:17 UTC — full-codebase deep scan
@@ -24,7 +26,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PYTHON_VERSION: "3.12"
+  PYTHON_VERSION: "3.13"
 
   # ---------------------------------------------------------------------
   # SEVERITY GATES — flip these to change what turns this workflow red.
@@ -35,7 +37,13 @@ env:
   # ---------------------------------------------------------------------
   BANDIT_FAIL_SEVERITY: HIGH # LOW | MEDIUM | HIGH
   SEMGREP_FAIL_SEVERITY: error # error | warning | note (Semgrep ERROR/WARNING/INFO -> SARIF error/warning/note)
-  PIP_AUDIT_IGNORE_VULNS: "" # space-separated CVE/GHSA/PYSEC ids accepted as risk, e.g. "GHSA-xxxx-yyyy-zzzz"
+  # Accepted risk: starlette 0.41.3 (pulled in transitively by fastapi==0.115.6)
+  # has known advisories fixed in 0.47+/1.x, but fastapi only allows
+  # starlette<0.42 at this pin — the fix is upgrading fastapi itself
+  # (0.115.6 -> 0.141.x, 85 releases), which needs its own dedicated pass
+  # with full regression testing, not a drive-by dependency bump. Remove
+  # these once that upgrade lands.
+  PIP_AUDIT_IGNORE_VULNS: "PYSEC-2026-161 PYSEC-2026-248 PYSEC-2026-249 PYSEC-2026-1942 PYSEC-2026-1941 PYSEC-2026-2281 PYSEC-2026-2280"
   TRUFFLEHOG_FAIL_ON_VERIFIED: "true" # "true": only provider-confirmed live secrets fail CI. "false": also fail on unverified candidates.
 
 jobs:
@@ -43,9 +51,9 @@ jobs:
     name: Bandit (Python SAST)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -66,7 +74,7 @@ jobs:
 
       - name: Upload SARIF to Code Scanning
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         continue-on-error: true # don't break the build on private repos without GHAS
         with:
           sarif_file: bandit-results.sarif
@@ -74,7 +82,7 @@ jobs:
 
       - name: Upload raw results artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bandit-results
           path: bandit-results.json
@@ -113,11 +121,11 @@ jobs:
     name: Semgrep (SAST — Python & SQL injection)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # needed so --baseline-commit can diff against the PR base
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -131,7 +139,7 @@ jobs:
 
       - name: Run semgrep
         # Diff-aware on PRs (only reports findings introduced by the diff,
-        # via --baseline-commit) for speed; full-repo on push/schedule/
+        # via --baseline-commit) for speed; full-repo on schedule/
         # workflow_dispatch so the weekly cron always covers everything.
         run: |
           BASELINE_ARGS=""
@@ -147,7 +155,7 @@ jobs:
 
       - name: Upload SARIF to Code Scanning
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         continue-on-error: true
         with:
           sarif_file: semgrep-results.sarif
@@ -155,7 +163,7 @@ jobs:
 
       - name: Upload raw results artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: semgrep-results
           path: semgrep-results.sarif
@@ -200,9 +208,9 @@ jobs:
     name: pip-audit (dependency vulnerabilities)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -238,7 +246,7 @@ jobs:
 
       - name: Upload raw results artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pip-audit-results
           path: pip-audit-results.json
@@ -254,7 +262,7 @@ jobs:
     name: TruffleHog (secret detection)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # full history: secrets committed-then-deleted are still in past commits
 
@@ -279,7 +287,7 @@ jobs:
 
       - name: Run TruffleHog
         # Diff scan on PRs (only commits introduced by this PR); full
-        # filesystem scan on push/schedule/workflow_dispatch, so the weekly
+        # filesystem scan on schedule/workflow_dispatch, so the weekly
         # cron always sweeps the whole repo history.
         #
         # --no-update: trufflehog otherwise checks for and installs a newer
@@ -300,7 +308,7 @@ jobs:
 
       - name: Upload raw results artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: trufflehog-results
           path: trufflehog-results.jsonl

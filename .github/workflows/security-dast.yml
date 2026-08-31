@@ -2,12 +2,13 @@ name: "Security: DAST (OWASP ZAP)"
 
 # Unlike the SAST workflow, DAST always exercises the whole running app on
 # every trigger — there's no meaningful "diff-only" mode for a dynamic scan.
-# The weekly cron just guarantees this runs even during a quiet week with no
-# PRs/pushes, so newly-published ZAP rules still get applied regularly.
+# No push-to-main trigger on purpose: merging a PR already re-runs this via
+# the pull_request event, so a separate push trigger just meant a second run
+# back-to-back at merge time. The weekly cron below (and manual runs) is what
+# covers direct pushes to main and quiet weeks with no PR activity, so newly-
+# published ZAP rules still get applied regularly.
 on:
   pull_request:
-    branches: [main]
-  push:
     branches: [main]
   schedule:
     - cron: "37 4 * * 1" # Mondays 04:37 UTC (offset from security-sast.yml's 04:17 run)
@@ -53,11 +54,11 @@ jobs:
           --health-retries=10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.13"
           cache: pip
           cache-dependency-path: requirements.txt
 
@@ -79,6 +80,11 @@ jobs:
           done
 
       - name: Start app under DAST fixture double
+        # PYTHONPATH=. so `from test_main import FakeClient` in run_target.py
+        # resolves — running a script by path only puts *its own* directory
+        # on sys.path, not the repo root where test_main.py actually lives.
+        env:
+          PYTHONPATH: .
         run: |
           nohup python .github/dast/run_target.py > app.log 2>&1 &
           echo $! > app.pid
@@ -98,29 +104,42 @@ jobs:
 
       - name: Log in and capture an authenticated session cookie
         id: login
+        env:
+          PYTHONPATH: . # same reason as the previous step: test_main.py lives at the repo root
         run: |
           COOKIE=$(python .github/dast/login_for_dast.py)
           echo "::add-mask::$COOKIE"
           echo "SESSION_COOKIE=$COOKIE" >> "$GITHUB_ENV"
 
       - name: OWASP ZAP baseline scan
-        uses: zaproxy/action-baseline@v0.14.0 # check the marketplace for newer tags periodically
+        uses: zaproxy/action-baseline@v0.15.0 # check the marketplace for newer tags periodically
+        # fail_action is deliberately false: the underlying ZAP container's
+        # own exit code doesn't distinguish "only WARN-tagged alerts fired"
+        # from "a FAIL-tagged alert fired" — it treats any alert at all as
+        # a failure, which would make .zap/rules.tsv's WARN/FAIL split
+        # meaningless. Instead this step always succeeds and the dedicated
+        # "Enforce severity gate" step below decides pass/fail from the
+        # JSON report, honoring that file's WARN vs FAIL classification.
+        continue-on-error: true
         with:
           target: "http://localhost:8000/"
           # .zap/rules.tsv is this workflow's severity-threshold file — see
           # the comments in that file for how to change which alerts WARN
           # vs. FAIL the job (the DAST equivalent of the SAST env-var gates).
           rules_file_name: ".zap/rules.tsv"
-          fail_action: true
+          fail_action: false
           allow_issue_writing: false
           artifact_name: "zap-report"
           token: ${{ secrets.GITHUB_TOKEN }}
-          # Injects the authenticated session cookie into every request ZAP
-          # makes, so the crawl/attack reaches the logged-in area (day view,
-          # agenda, ticket/flight forms) instead of stopping at the login
-          # page. Drop this cmd_options block entirely to scan unauthenticated
-          # only.
+          # -J/-r/-w: request JSON/HTML/Markdown reports under fixed names
+          # so the steps below don't have to guess what the action produces
+          # by default. -z: injects the authenticated session cookie into
+          # every request ZAP makes, so the crawl/attack reaches the
+          # logged-in area (day view, agenda, ticket/flight forms) instead
+          # of stopping at the login page. Drop the -z block to scan
+          # unauthenticated only.
           cmd_options: >-
+            -J report_json.json -r report_html.html -w report_md.md
             -z "-config replacer.full_list(0).description=auth
             -config replacer.full_list(0).enabled=true
             -config replacer.full_list(0).matchtype=REQ_HEADER
@@ -140,6 +159,28 @@ jobs:
               echo "No markdown report produced — check the \`zap-report\` artifact and the step above for scan errors."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce severity gate
+        if: always()
+        run: |
+          # .zap/rules.tsv is the single source of truth for WARN vs FAIL —
+          # this reads the FAIL-tagged rule IDs straight from that file, so
+          # there's only one place to edit to change the threshold.
+          if [ ! -f report_json.json ]; then
+            echo "::error::report_json.json was not produced by the ZAP scan step — check its logs above"
+            exit 1
+          fi
+          FAIL_IDS=$(awk -F'\t' '$2=="FAIL"{print $1}' .zap/rules.tsv)
+          COUNT=0
+          for id in $FAIL_IDS; do
+            n=$(jq --arg id "$id" '[.site[]?.alerts[]? | select(.pluginid == $id)] | length' report_json.json)
+            COUNT=$((COUNT + n))
+          done
+          echo "FAIL-tagged alerts found: $COUNT" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "::error::ZAP found $COUNT alert(s) tagged FAIL in .zap/rules.tsv — see the job summary and zap-report artifact"
+            exit 1
+          fi
 
       - name: Stop app
         if: always()
