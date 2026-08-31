@@ -66,10 +66,13 @@ jobs:
         # still lands in the SARIF/JSON output below. The dedicated gate
         # step further down is what actually decides pass/fail, based on
         # BANDIT_FAIL_SEVERITY above.
+        # `./test_main.py` is excluded: `assert` is how pytest tests are
+        # meant to be written, so B101 (assert_used) there is just noise,
+        # not a finding — bandit still runs B101 against everything else.
         run: |
-          bandit -r . --exclude ./.git \
+          bandit -r . --exclude ./.git,./test_main.py \
             -f sarif -o bandit-results.sarif || true
-          bandit -r . --exclude ./.git \
+          bandit -r . --exclude ./.git,./test_main.py \
             -f json -o bandit-results.json || true
 
       - name: Upload SARIF to Code Scanning

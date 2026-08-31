@@ -23,6 +23,14 @@ app = FastAPI()
 COOKIE_KWARGS = dict(httponly=True, samesite="lax", secure=os.getenv("VERCEL_ENV") is not None, max_age=60 * 60 * 24 * 30)
 
 
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "bespoke-interval"}
@@ -598,7 +606,10 @@ def ticket_add_submit(
     client = get_supabase_client()
     title = title.strip()
     venue = venue.strip()
-    occurs_dt = _dest_local_dt(bundle.trip, occurs_at)
+    try:
+        occurs_dt = _dest_local_dt(bundle.trip, occurs_at)
+    except ValueError:
+        return RedirectResponse("/tickets/add", status_code=303)
     result = client.table("tickets").insert(
         {
             "trip_id": bundle.trip["id"],
@@ -825,8 +836,11 @@ def flight_add_submit(
     leg = leg.strip()
     code = code.strip()
     note = note.strip()
-    departs_dt = _dest_local_dt(bundle.trip, departs_at)
-    arrives_dt = _dest_local_dt(bundle.trip, arrives_at)
+    try:
+        departs_dt = _dest_local_dt(bundle.trip, departs_at)
+        arrives_dt = _dest_local_dt(bundle.trip, arrives_at)
+    except ValueError:
+        return RedirectResponse("/flights/add", status_code=303)
     result = client.table("flights").insert(
         {
             "trip_id": bundle.trip["id"],
@@ -1023,8 +1037,11 @@ def add_submit(
     if not day or type not in logic.INK:
         return RedirectResponse("/add", status_code=303)
 
-    hh, mm = (int(p) for p in start.split(":"))
-    starts_at = _local_dt(day, day["reference_timezone"], hh, mm)
+    try:
+        hh, mm = (int(p) for p in start.split(":"))
+        starts_at = _local_dt(day, day["reference_timezone"], hh, mm)
+    except ValueError:
+        return RedirectResponse("/add", status_code=303)
     ends_at = starts_at + timedelta(minutes=length_minutes)
 
     client = get_supabase_client()
