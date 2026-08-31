@@ -53,11 +53,11 @@ jobs:
           --health-retries=10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.x"
           cache: pip
           cache-dependency-path: requirements.txt
 
@@ -104,7 +104,7 @@ jobs:
           echo "SESSION_COOKIE=$COOKIE" >> "$GITHUB_ENV"
 
       - name: OWASP ZAP baseline scan
-        uses: zaproxy/action-baseline@v0.14.0 # check the marketplace for newer tags periodically
+        uses: zaproxy/action-baseline@v0.15.0 # check the marketplace for newer tags periodically
         with:
           target: "http://localhost:8000/"
           # .zap/rules.tsv is this workflow's severity-threshold file — see
