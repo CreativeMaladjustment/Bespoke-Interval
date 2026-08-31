@@ -1,0 +1,139 @@
+name: "Security: DAST (OWASP ZAP)"
+
+# Unlike the SAST workflow, DAST always exercises the whole running app on
+# every trigger — there's no meaningful "diff-only" mode for a dynamic scan.
+# The weekly cron just guarantees this runs even during a quiet week with no
+# PRs/pushes, so newly-published ZAP rules still get applied regularly.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "37 4 * * 1" # Mondays 04:37 UTC (offset from security-sast.yml's 04:17 run)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write # zaproxy/action-baseline can optionally file an issue; disabled below via allow_issue_writing
+  pull-requests: write # lets the ZAP action post its findings as a PR comment
+
+concurrency:
+  group: security-dast-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dast:
+    name: OWASP ZAP baseline scan
+    runs-on: ubuntu-latest
+
+    # This app talks to a hosted Supabase project over HTTPS (see db.py) —
+    # it has no direct Postgres connection to point at a service container.
+    # The container below is still spun up (as requested) and used for a
+    # real, useful purpose: proving the supabase/migrations/*.sql files
+    # apply cleanly to vanilla Postgres. The app itself is booted against an
+    # in-memory fixture double (see .github/dast/run_target.py) that mirrors
+    # the same data the Postgres container would hold, so ZAP gets a fully
+    # working, fully-rendered target to crawl and attack.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bespoke_interval
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install app dependencies
+        run: pip install -r requirements.txt
+
+      - name: Apply SQL migrations to local Postgres (schema smoke-test)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for f in $(ls supabase/migrations/*.sql | sort); do
+            echo "-- Applying $f"
+            psql -h localhost -U postgres -d bespoke_interval -v ON_ERROR_STOP=1 -f "$f"
+          done
+
+      - name: Start app under DAST fixture double
+        run: |
+          nohup python .github/dast/run_target.py > app.log 2>&1 &
+          echo $! > app.pid
+
+      - name: Wait for app to become healthy
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health > /dev/null; then
+              echo "App is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "App failed to start within 30s"
+          cat app.log
+          exit 1
+
+      - name: Log in and capture an authenticated session cookie
+        id: login
+        run: |
+          COOKIE=$(python .github/dast/login_for_dast.py)
+          echo "::add-mask::$COOKIE"
+          echo "SESSION_COOKIE=$COOKIE" >> "$GITHUB_ENV"
+
+      - name: OWASP ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.14.0 # check the marketplace for newer tags periodically
+        with:
+          target: "http://localhost:8000/"
+          # .zap/rules.tsv is this workflow's severity-threshold file — see
+          # the comments in that file for how to change which alerts WARN
+          # vs. FAIL the job (the DAST equivalent of the SAST env-var gates).
+          rules_file_name: ".zap/rules.tsv"
+          fail_action: true
+          allow_issue_writing: false
+          artifact_name: "zap-report"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Injects the authenticated session cookie into every request ZAP
+          # makes, so the crawl/attack reaches the logged-in area (day view,
+          # agenda, ticket/flight forms) instead of stopping at the login
+          # page. Drop this cmd_options block entirely to scan unauthenticated
+          # only.
+          cmd_options: >-
+            -z "-config replacer.full_list(0).description=auth
+            -config replacer.full_list(0).enabled=true
+            -config replacer.full_list(0).matchtype=REQ_HEADER
+            -config replacer.full_list(0).matchstr=Cookie
+            -config replacer.full_list(0).regex=false
+            -config replacer.full_list(0).replacement=bespoke_session=${{ env.SESSION_COOKIE }}"
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## OWASP ZAP baseline scan"
+            echo
+            if [ -f report_md.md ]; then
+              cat report_md.md
+            else
+              echo "No markdown report produced — check the \`zap-report\` artifact and the step above for scan errors."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Stop app
+        if: always()
+        run: kill "$(cat app.pid)" 2>/dev/null || true
