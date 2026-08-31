@@ -37,7 +37,13 @@ env:
   # ---------------------------------------------------------------------
   BANDIT_FAIL_SEVERITY: HIGH # LOW | MEDIUM | HIGH
   SEMGREP_FAIL_SEVERITY: error # error | warning | note (Semgrep ERROR/WARNING/INFO -> SARIF error/warning/note)
-  PIP_AUDIT_IGNORE_VULNS: "" # space-separated CVE/GHSA/PYSEC ids accepted as risk, e.g. "GHSA-xxxx-yyyy-zzzz"
+  # Accepted risk: starlette 0.41.3 (pulled in transitively by fastapi==0.115.6)
+  # has known advisories fixed in 0.47+/1.x, but fastapi only allows
+  # starlette<0.42 at this pin — the fix is upgrading fastapi itself
+  # (0.115.6 -> 0.141.x, 85 releases), which needs its own dedicated pass
+  # with full regression testing, not a drive-by dependency bump. Remove
+  # these once that upgrade lands.
+  PIP_AUDIT_IGNORE_VULNS: "PYSEC-2026-161 PYSEC-2026-248 PYSEC-2026-249 PYSEC-2026-1942 PYSEC-2026-1941 PYSEC-2026-2281 PYSEC-2026-2280"
   TRUFFLEHOG_FAIL_ON_VERIFIED: "true" # "true": only provider-confirmed live secrets fail CI. "false": also fail on unverified candidates.
 
 jobs:
