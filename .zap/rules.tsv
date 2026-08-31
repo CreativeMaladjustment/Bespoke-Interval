@@ -1,0 +1,27 @@
+# OWASP ZAP baseline scan alert thresholds.
+#
+# Format (tab-separated): <rule id>	<action>	(optional comment)
+# Action is one of:
+#   IGNORE  - never report this rule
+#   WARN    - report it (job summary / PR comment / HTML report) but never
+#             fail the job on its own
+#   FAIL    - report it AND fail the job if it fires
+#
+# This is the DAST equivalent of the SAST severity-threshold env vars at the
+# top of security-sast.yml: to make the scan stricter, flip more rules to
+# FAIL; to cut noise on a rule you've triaged and accepted, set it to IGNORE
+# or WARN. Full rule ID list: https://www.zaproxy.org/docs/alerts/
+#
+# Ignored below because this app is a private, password-gated, two-user trip
+# planner with no third-party embeds or cross-origin needs — these fire on
+# effectively every page and add noise without changing what a fix would be.
+10038	WARN	(Content Security Policy Header Not Set)
+10063	WARN	(Permissions Policy Header Not Set)
+10096	WARN	(Timestamp Disclosure - Unix)
+
+# Anything not listed here uses ZAP's own default threshold and will show up
+# as WARN in the report/job summary; add explicit FAIL rows for the alerts
+# you want to hard-block a PR (e.g. SQL injection, XSS):
+40018	FAIL	(SQL Injection)
+40012	FAIL	(Cross Site Scripting (Reflected))
+40014	FAIL	(Cross Site Scripting (Persistent))
