@@ -2,12 +2,13 @@ name: "Security: DAST (OWASP ZAP)"
 
 # Unlike the SAST workflow, DAST always exercises the whole running app on
 # every trigger — there's no meaningful "diff-only" mode for a dynamic scan.
-# The weekly cron just guarantees this runs even during a quiet week with no
-# PRs/pushes, so newly-published ZAP rules still get applied regularly.
+# No push-to-main trigger on purpose: merging a PR already re-runs this via
+# the pull_request event, so a separate push trigger just meant a second run
+# back-to-back at merge time. The weekly cron below (and manual runs) is what
+# covers direct pushes to main and quiet weeks with no PR activity, so newly-
+# published ZAP rules still get applied regularly.
 on:
   pull_request:
-    branches: [main]
-  push:
     branches: [main]
   schedule:
     - cron: "37 4 * * 1" # Mondays 04:37 UTC (offset from security-sast.yml's 04:17 run)

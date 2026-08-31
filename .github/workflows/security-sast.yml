@@ -1,15 +1,17 @@
 name: "Security: SAST, dependencies & secrets"
 
 # PRs get a fast, diff-aware scan wherever a tool supports it (Semgrep
-# --baseline-commit, TruffleHog since-commit). Pushes to main, manual runs,
-# and the weekly cron below always scan the *entire* codebase, so
-# newly-published CVEs or rule updates that apply to unchanged code still
-# surface on a regular cadence (see the `github.event_name == 'pull_request'`
-# checks inside the semgrep/secrets jobs).
+# --baseline-commit, TruffleHog since-commit). No push-to-main trigger on
+# purpose: merging a PR already re-triggers this via the pull_request event's
+# `synchronize`/re-checks, so a separate push trigger just meant a second run
+# back-to-back at merge time. That does leave a gap for direct pushes to main
+# (if branch protection allows them) and for main drifting between merges —
+# the weekly cron below (and manual runs) is what covers that with a
+# full-codebase scan, so newly-published CVEs or rule updates still surface
+# on a regular cadence (see the `github.event_name == 'pull_request'` checks
+# inside the semgrep/secrets jobs).
 on:
   pull_request:
-    branches: [main]
-  push:
     branches: [main]
   schedule:
     - cron: "17 4 * * 1" # Mondays 04:17 UTC — full-codebase deep scan
@@ -131,7 +133,7 @@ jobs:
 
       - name: Run semgrep
         # Diff-aware on PRs (only reports findings introduced by the diff,
-        # via --baseline-commit) for speed; full-repo on push/schedule/
+        # via --baseline-commit) for speed; full-repo on schedule/
         # workflow_dispatch so the weekly cron always covers everything.
         run: |
           BASELINE_ARGS=""
@@ -279,7 +281,7 @@ jobs:
 
       - name: Run TruffleHog
         # Diff scan on PRs (only commits introduced by this PR); full
-        # filesystem scan on push/schedule/workflow_dispatch, so the weekly
+        # filesystem scan on schedule/workflow_dispatch, so the weekly
         # cron always sweeps the whole repo history.
         #
         # --no-update: trufflehog otherwise checks for and installs a newer
