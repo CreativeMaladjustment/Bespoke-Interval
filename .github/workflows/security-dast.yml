@@ -15,8 +15,10 @@ on:
 
 permissions:
   contents: read
-  issues: write # zaproxy/action-baseline can optionally file an issue; disabled below via allow_issue_writing
   pull-requests: write # lets the ZAP action post its findings as a PR comment
+  # No `issues: write`: allow_issue_writing is false below, so the ZAP action
+  # never needs it — granting it anyway would just widen blast radius for no
+  # benefit.
 
 concurrency:
   group: security-dast-${{ github.workflow }}-${{ github.ref }}
@@ -66,7 +68,7 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: |
-          for f in $(ls supabase/migrations/*.sql | sort); do
+          for f in supabase/migrations/*.sql; do
             echo "-- Applying $f"
             psql -h localhost -U postgres -d bespoke_interval -v ON_ERROR_STOP=1 -f "$f"
           done
@@ -136,4 +138,7 @@ jobs:
 
       - name: Stop app
         if: always()
-        run: kill "$(cat app.pid)" 2>/dev/null || true
+        run: |
+          if [ -f app.pid ]; then
+            kill "$(cat app.pid)" 2>/dev/null || true
+          fi

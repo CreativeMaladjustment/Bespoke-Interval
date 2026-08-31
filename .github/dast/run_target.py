@@ -26,4 +26,9 @@ from test_main import FakeClient  # noqa: E402
 with patch("main.get_supabase_client", return_value=FakeClient()):
     import main  # noqa: E402  (import after the patch is active)
 
-    uvicorn.run(main.app, host="0.0.0.0", port=8000)
+    # 0.0.0.0 is required, not just convenient: the ZAP scan step runs in its
+    # own Docker container and reaches this process over the runner's
+    # loopback interface, which only forwards to a socket bound on all
+    # interfaces. This process only ever exists inside an ephemeral,
+    # network-isolated CI job, so there's no real exposure to bind broadly.
+    uvicorn.run(main.app, host="0.0.0.0", port=8000)  # nosec B104

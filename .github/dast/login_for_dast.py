@@ -19,6 +19,7 @@ resp = httpx.post(
     "http://localhost:8000/login",
     data={"traveler_id": JD_ID, "password": "dast-scan-password"},
     follow_redirects=False,
+    timeout=10.0,  # fail fast instead of hanging the workflow if the target never responds
 )
 
 cookie = resp.cookies.get("bespoke_session")

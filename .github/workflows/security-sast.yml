@@ -205,7 +205,7 @@ jobs:
           cache-dependency-path: requirements.txt
 
       - name: Install pip-audit
-        run: pip install pip-audit
+        run: pip install "pip-audit==2.9.0" # pin deliberately, like the other scanners — bump on purpose, not by drift
 
       - name: Run pip-audit
         # pip-audit's advisory sources (OSV/PyPA) don't consistently expose
@@ -255,12 +255,23 @@ jobs:
           fetch-depth: 0 # full history: secrets committed-then-deleted are still in past commits
 
       - name: Install TruffleHog
-        run: curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
-        # Pin this to a specific release once you've verified it against the
-        # latest https://github.com/trufflesecurity/trufflehog/releases —
-        # installing off `main` favors always-current detectors over supply-
-        # chain pinning. Dependabot doesn't track shell-script installs, so
-        # this needs a manual bump periodically.
+        # Pinned release binary + published checksum verification, instead of
+        # piping the `main`-branch install script into `sh` (that script can
+        # change without review between runs and isn't checksummed).
+        # TRUFFLEHOG_VERSION is a deliberate, reviewed bump — check
+        # https://github.com/trufflesecurity/trufflehog/releases for newer
+        # tags periodically; Dependabot doesn't track this kind of pin.
+        env:
+          TRUFFLEHOG_VERSION: "3.83.7"
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          BASE_URL="https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}"
+          curl -sSfLO "${BASE_URL}/trufflehog_${TRUFFLEHOG_VERSION}_linux_amd64.tar.gz"
+          curl -sSfLO "${BASE_URL}/trufflehog_${TRUFFLEHOG_VERSION}_checksums.txt"
+          sha256sum --ignore-missing -c "trufflehog_${TRUFFLEHOG_VERSION}_checksums.txt"
+          tar -xzf "trufflehog_${TRUFFLEHOG_VERSION}_linux_amd64.tar.gz" trufflehog
+          sudo install -m 0755 trufflehog /usr/local/bin/trufflehog
 
       - name: Run TruffleHog
         # Diff scan on PRs (only commits introduced by this PR); full
